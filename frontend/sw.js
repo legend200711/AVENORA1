@@ -44,16 +44,17 @@ _messaging.onBackgroundMessage((payload) => {
 
 // ── Cache identity ───────────────────────────────────────────────────────────
 // SW_VERSION is embedded at build time so the diagnostic panel can read it.
-const SW_VERSION  = 'v3';
-const CACHE_NAME  = 'avenora-cache-v3';
+const SW_VERSION  = 'v4';
+const CACHE_NAME  = 'avenora-cache-v4';
 
 // Prefixes of ALL old caches that must be wiped on activate.
 // Covers every previous Avenora and Shadow Nexus name that may be installed
 // on a user's device.
 const OLD_CACHE_PREFIXES = [
   'avenora-v',        // avenora-v1, avenora-v2
-  'avenora-cache-v1', // future-proof exact names below v3
+  'avenora-cache-v1', // exact names below v4
   'avenora-cache-v2',
+  'avenora-cache-v3', // v3 had wrong BASE path /AVENORA (missing 1) — evict
   'legend-cache',     // old legend-universe names
   'shadow-nexus',     // old Shadow Nexus caches
   'snx-cache',
@@ -63,7 +64,7 @@ const OLD_CACHE_PREFIXES = [
 // ── Static assets to pre-cache ────────────────────────────────────────────────
 // All paths are relative to the SW scope (/AVENORA1/).
 // Do NOT list API URLs, Firebase URLs, or any runtime-fetched data here.
-const BASE = '/AVENORA';
+const BASE = '/AVENORA1';
 const STATIC_ASSETS = [
   `${BASE}/index.html`,
   `${BASE}/offline.html`,
