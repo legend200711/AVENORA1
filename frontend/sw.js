@@ -1,8 +1,8 @@
 /**
  * AVENORA — Service Worker v3
  *
- * Deployment base: /AVENORA/frontend/
- * GitHub Pages URL: https://<user>.github.io/AVENORA/frontend/
+ * Deployment base: /AVENORA1/frontend/
+ * GitHub Pages URL: https://<user>.github.io/AVENORA1/frontend/
  *
  * Rules:
  *   • NEVER cache: API responses, Firebase data, auth responses,
@@ -33,9 +33,9 @@ _messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title || 'AVENORA';
   const options = {
     body:     payload.notification?.body || 'You have a new notification',
-    icon:     '/AVENORA/frontend/icons/icon-192.svg',
-    badge:    '/AVENORA/frontend/icons/icon-72.svg',
-    data:     { url: payload.data?.url || '/AVENORA/frontend/index.html' },
+    icon:     '/AVENORA1/frontend/icons/icon-192.svg',
+    badge:    '/AVENORA1/frontend/icons/icon-72.svg',
+    data:     { url: payload.data?.url || '/AVENORA1/frontend/index.html' },
     tag:      payload.data?.tag || 'avenora-notification',
     renotify: false,
   };
@@ -61,9 +61,9 @@ const OLD_CACHE_PREFIXES = [
 ];
 
 // ── Static assets to pre-cache ────────────────────────────────────────────────
-// All paths are relative to the SW scope (/AVENORA/frontend/).
+// All paths are relative to the SW scope (/AVENORA1/frontend/).
 // Do NOT list API URLs, Firebase URLs, or any runtime-fetched data here.
-const BASE = '/AVENORA/frontend';
+const BASE = '/AVENORA1/frontend';
 const STATIC_ASSETS = [
   `${BASE}/index.html`,
   `${BASE}/offline.html`,
@@ -245,9 +245,9 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'AVENORA';
   const options = {
     body:     data.body || 'You have a new notification',
-    icon:     '/AVENORA/frontend/icons/icon-192.svg',
-    badge:    '/AVENORA/frontend/icons/icon-72.svg',
-    data:     { url: data.url || '/AVENORA/frontend/index.html' },
+    icon:     '/AVENORA1/frontend/icons/icon-192.svg',
+    badge:    '/AVENORA1/frontend/icons/icon-72.svg',
+    data:     { url: data.url || '/AVENORA1/frontend/index.html' },
     tag:      data.tag || 'avenora-notification',
     renotify: false,
   };
@@ -256,7 +256,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/AVENORA/frontend/index.html';
+  const url = event.notification.data?.url || '/AVENORA1/frontend/index.html';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
