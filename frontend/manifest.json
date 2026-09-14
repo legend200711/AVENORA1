@@ -2,7 +2,8 @@
   "name": "AVENORA",
   "short_name": "Avenora",
   "description": "AVENORA — A place where everyone belongs. Connection, creativity, positivity, and new beginnings.",
-  "start_url": "/",
+  "start_url": "/AVENORA/frontend/index.html",
+  "scope": "/AVENORA/",
   "display": "standalone",
   "background_color": "#090807",
   "theme_color": "#090807",
@@ -62,20 +63,20 @@
     {
       "name": "Avenora Feed",
       "short_name": "Feed",
-      "url": "/#social",
-      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "url": "/AVENORA/frontend/index.html#social",
+      "icons": [{ "src": "icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     },
     {
       "name": "Avenora Arcade",
       "short_name": "Arcade",
-      "url": "/#arcade",
-      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "url": "/AVENORA/frontend/index.html#arcade",
+      "icons": [{ "src": "icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     },
     {
       "name": "Avenora DJ System",
       "short_name": "DJ",
-      "url": "/#dj",
-      "icons": [{ "src": "/icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
+      "url": "/AVENORA/frontend/index.html#dj",
+      "icons": [{ "src": "icons/icon-96.svg", "sizes": "96x96", "type": "image/svg+xml" }]
     }
   ]
 }

@@ -1,13 +1,20 @@
 /**
- * AVENORA - Service Worker
- * Provides offline capability for static assets and cached pages.
- * Does NOT cache dynamic API responses (those require network).
+ * AVENORA — Service Worker v3
  *
- * Also handles Firebase Cloud Messaging (FCM) background push notifications.
+ * Deployment base: /AVENORA/frontend/
+ * GitHub Pages URL: https://<user>.github.io/AVENORA/frontend/
+ *
+ * Rules:
+ *   • NEVER cache: API responses, Firebase data, auth responses,
+ *     live-session data, feed data, dashboard data, Cloud Stream status.
+ *   • ONLY cache: static HTML/CSS/JS/icon assets.
+ *   • On activate: delete ALL old Avenora and Shadow Nexus caches.
+ *   • On install:  self.skipWaiting() so the new SW takes over immediately.
+ *   • On activate: clients.claim() so open pages get the new SW immediately.
  */
 
-// ── Firebase Messaging background handler ──────────────────────
-// Must be imported BEFORE any other sw code per Firebase docs.
+// ── Firebase Cloud Messaging background handler ─────────────────────────────
+// Must be imported BEFORE any other SW code per Firebase docs.
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
 
@@ -22,121 +29,201 @@ firebase.initializeApp({
 
 const _messaging = firebase.messaging();
 
-// Handle background push messages (app not in foreground)
 _messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title || 'AVENORA';
   const options = {
-    body:    payload.notification?.body || 'You have a new notification',
-    icon:    '/icons/icon-192.svg',
-    badge:   '/icons/icon-72.svg',
-    data:    { url: payload.data?.url || '/' },
-    tag:     payload.data?.tag || 'avenora-notification',
+    body:     payload.notification?.body || 'You have a new notification',
+    icon:     '/AVENORA/frontend/icons/icon-192.svg',
+    badge:    '/AVENORA/frontend/icons/icon-72.svg',
+    data:     { url: payload.data?.url || '/AVENORA/frontend/index.html' },
+    tag:      payload.data?.tag || 'avenora-notification',
     renotify: false,
   };
   return self.registration.showNotification(title, options);
 });
 
-const CACHE_NAME = 'avenora-v2';
-// Bump version when static assets change so the old cache is pruned on activate.
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/offline.html',
-  '/manifest.json',
-  '/src/styles/theme.css',
-  '/src/styles/visual.css',
-  '/src/styles/social.css',
-  '/src/styles/midnight.css',
-  '/src/styles/music.css',
-  '/src/store/state.js',
-  '/src/utils/ui.js',
-  '/src/services/api.js',
-  '/src/services/musicService.js',
-  '/src/components/visual/visualEngine.js',
-  '/src/app.js',
-  '/src/pages/hub.js',
-  '/src/pages/auth.js',
-  '/src/pages/social.js',
-  '/src/pages/video.js',
-  '/src/pages/live.js',
-  '/src/pages/cloudstream.js',
-  '/src/pages/dj.js',
-  '/src/pages/music.js',
-  '/src/pages/arcade.js',
-  '/src/pages/chat.js',
-  '/src/pages/gallery.js',
-  '/src/pages/admin.js',
-  '/src/pages/search.js',
-  '/src/pages/profile.js',
-  '/src/pages/settings.js',
-  '/src/services/firebase.js',
-  'https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap',
+// ── Cache identity ───────────────────────────────────────────────────────────
+// SW_VERSION is embedded at build time so the diagnostic panel can read it.
+const SW_VERSION  = 'v3';
+const CACHE_NAME  = 'avenora-cache-v3';
+
+// Prefixes of ALL old caches that must be wiped on activate.
+// Covers every previous Avenora and Shadow Nexus name that may be installed
+// on a user's device.
+const OLD_CACHE_PREFIXES = [
+  'avenora-v',        // avenora-v1, avenora-v2
+  'avenora-cache-v1', // future-proof exact names below v3
+  'avenora-cache-v2',
+  'legend-cache',     // old legend-universe names
+  'shadow-nexus',     // old Shadow Nexus caches
+  'snx-cache',
+  'shadowsocial',
 ];
 
-// ─── Install: cache static assets ─────────────────────────
+// ── Static assets to pre-cache ────────────────────────────────────────────────
+// All paths are relative to the SW scope (/AVENORA/frontend/).
+// Do NOT list API URLs, Firebase URLs, or any runtime-fetched data here.
+const BASE = '/AVENORA/frontend';
+const STATIC_ASSETS = [
+  `${BASE}/index.html`,
+  `${BASE}/offline.html`,
+  `${BASE}/manifest.json`,
+  `${BASE}/src/styles/theme.css`,
+  `${BASE}/src/styles/visual.css`,
+  `${BASE}/src/styles/social.css`,
+  `${BASE}/src/styles/midnight.css`,
+  `${BASE}/src/styles/music.css`,
+  `${BASE}/src/styles/hub.css`,
+  `${BASE}/src/styles/chat-extended.css`,
+  `${BASE}/src/styles/companion.css`,
+  `${BASE}/src/styles/responsive.css`,
+  `${BASE}/src/styles/customize.css`,
+  `${BASE}/src/styles/theme-control.css`,
+  `${BASE}/src/store/state.js`,
+  `${BASE}/src/utils/ui.js`,
+  `${BASE}/src/services/api.js`,
+  `${BASE}/src/services/firebase.js`,
+  `${BASE}/src/services/musicService.js`,
+  `${BASE}/src/services/themeService.js`,
+  `${BASE}/src/components/visual/visualEngine.js`,
+  `${BASE}/src/components/admin/ThemeControlCenter.js`,
+  `${BASE}/src/components/companion/companion.js`,
+  `${BASE}/src/app.js`,
+  `${BASE}/src/pages/hub.js`,
+  `${BASE}/src/pages/auth.js`,
+  `${BASE}/src/pages/social.js`,
+  `${BASE}/src/pages/video.js`,
+  `${BASE}/src/pages/live.js`,
+  `${BASE}/src/pages/cloudstream.js`,
+  `${BASE}/src/pages/dj.js`,
+  `${BASE}/src/pages/music.js`,
+  `${BASE}/src/pages/arcade.js`,
+  `${BASE}/src/pages/chat.js`,
+  `${BASE}/src/pages/gallery.js`,
+  `${BASE}/src/pages/admin.js`,
+  `${BASE}/src/pages/search.js`,
+  `${BASE}/src/pages/profile.js`,
+  `${BASE}/src/pages/settings.js`,
+  `${BASE}/src/pages/customize.js`,
+  `${BASE}/icons/icon-72.svg`,
+  `${BASE}/icons/icon-96.svg`,
+  `${BASE}/icons/icon-128.svg`,
+  `${BASE}/icons/icon-144.svg`,
+  `${BASE}/icons/icon-152.svg`,
+  `${BASE}/icons/icon-192.svg`,
+  `${BASE}/icons/icon-384.svg`,
+  `${BASE}/icons/icon-512.svg`,
+];
+
+// ── Patterns that must NEVER be cached ───────────────────────────────────────
+function shouldNeverCache(url) {
+  const u = new URL(url);
+  // API calls (REST backend)
+  if (u.pathname.includes('/api/')) return true;
+  // Socket.io
+  if (u.pathname.startsWith('/socket.io')) return true;
+  // Firebase Realtime Database
+  if (u.hostname.includes('firebaseio.com')) return true;
+  // Firebase / Google APIs (auth, Firestore, Cloud Messaging)
+  if (u.hostname.includes('googleapis.com')) return true;
+  if (u.hostname.includes('firebasestorage.googleapis.com')) return true;
+  if (u.hostname.includes('identitytoolkit.googleapis.com')) return true;
+  if (u.hostname.includes('securetoken.googleapis.com')) return true;
+  // Firebase hosting CDN (dynamic data fetched at runtime)
+  if (u.hostname.includes('firebaseapp.com') && u.pathname.includes('/api')) return true;
+  // Analytics / tracking
+  if (u.hostname.includes('google-analytics.com')) return true;
+  if (u.hostname.includes('analytics.google.com')) return true;
+  return false;
+}
+
+// ── Install ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS.filter(url => !url.startsWith('http')));
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(() => {
+        console.log(`[SW ${SW_VERSION}] Installed — cache: ${CACHE_NAME}`);
+        // Take over immediately; do not wait for old SW to become idle.
+        return self.skipWaiting();
+      })
   );
 });
 
-// ─── Activate: clean old caches ───────────────────────────
+// ── Activate ──────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter(name => name !== CACHE_NAME)
-          .map(name => caches.delete(name))
-      );
-    }).then(() => self.clients.claim())
-  );
-});
-
-// ─── Fetch strategy ───────────────────────────────────────
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // Never cache API calls, Firebase traffic, or socket connections
-  if (
-    url.pathname.startsWith('/api/') ||
-    url.pathname.startsWith('/socket.io') ||
-    url.hostname.includes('firebaseio.com') ||
-    url.hostname.includes('googleapis.com') ||
-    url.hostname.includes('firebasestorage.googleapis.com')
-  ) {
-    return; // Network only
-  }
-
-  // Cache-first for static assets
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-
-      return fetch(event.request).then((response) => {
-        // Only cache successful GET requests for same origin
-        if (!response || response.status !== 200 || event.request.method !== 'GET') {
-          return response;
-        }
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
+      const deletions = cacheNames
+        .filter((name) => {
+          if (name === CACHE_NAME) return false; // keep current
+          // Delete anything that matches old Avenora / Shadow Nexus prefixes
+          return OLD_CACHE_PREFIXES.some((prefix) => name.startsWith(prefix)) ||
+                 (name !== CACHE_NAME && name.startsWith('avenora'));
+        })
+        .map((name) => {
+          console.log(`[SW ${SW_VERSION}] Deleting old cache: ${name}`);
+          return caches.delete(name);
         });
-        return response;
-      }).catch(() => {
-        // Offline fallback
-        if (event.request.destination === 'document') {
-          return caches.match('/offline.html') || caches.match('/index.html');
-        }
-        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+      return Promise.all(deletions);
+    }).then(() => {
+      console.log(`[SW ${SW_VERSION}] Activated — controlling all clients`);
+      // Immediately control all open pages — they will reload with the new SW.
+      return self.clients.claim();
+    }).then(() => {
+      // Tell every controlled client to reload so they pick up the new build.
+      return self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'SW_UPDATED', version: SW_VERSION, cache: CACHE_NAME });
+        });
       });
     })
   );
 });
 
-// ─── Background sync (for offline post submission) ─────────
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+self.addEventListener('fetch', (event) => {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
+
+  const url = event.request.url;
+
+  // Never intercept dynamic/API/Firebase traffic
+  if (shouldNeverCache(url)) return;
+
+  // Cache-first for static assets; network fallback with cache store
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(event.request).then((response) => {
+        // Only cache successful same-origin or CORS-safe responses
+        if (!response || response.status !== 200) return response;
+
+        // Do not cache opaque responses (cross-origin without CORS)
+        if (response.type === 'opaque') return response;
+
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      }).catch(() => {
+        // Offline fallback for navigation requests
+        if (event.request.destination === 'document') {
+          return (
+            caches.match(`${BASE}/offline.html`) ||
+            caches.match(`${BASE}/index.html`)
+          );
+        }
+        return new Response('Offline', {
+          status: 503,
+          statusText: 'Service Unavailable',
+        });
+      });
+    })
+  );
+});
+
+// ── Background sync ───────────────────────────────────────────────────────────
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-posts') {
     event.waitUntil(syncOfflinePosts());
@@ -144,27 +231,24 @@ self.addEventListener('sync', (event) => {
 });
 
 async function syncOfflinePosts() {
-  // Retrieve any posts saved offline and submit when connection restored
-  // Implementation: read from IndexedDB, POST to API
-  console.log('[SW] Syncing offline posts...');
+  console.log(`[SW ${SW_VERSION}] Syncing offline posts…`);
+  // TODO: read from IndexedDB, POST to API when back online
 }
 
-// ─── Push notifications ────────────────────────────────────
+// ── Push notifications ────────────────────────────────────────────────────────
 // FCM background messages are handled by _messaging.onBackgroundMessage above.
-// This listener handles non-FCM pushes (e.g. Web Push API from your own backend).
+// This handles raw Web Push (non-FCM) pushes from the Avenora backend.
 self.addEventListener('push', (event) => {
-  // FCM pushes are intercepted by the Firebase SW compat shim above;
-  // only handle raw pushes here if FCM is not available.
   if (!event.data) return;
   let data = {};
   try { data = event.data.json(); } catch { data = { body: event.data.text() }; }
   const title = data.title || 'AVENORA';
   const options = {
-    body:    data.body || 'You have a new notification',
-    icon:    '/icons/icon-192.svg',
-    badge:   '/icons/icon-72.svg',
-    data:    { url: data.url || '/' },
-    tag:     data.tag || 'avenora-notification',
+    body:     data.body || 'You have a new notification',
+    icon:     '/AVENORA/frontend/icons/icon-192.svg',
+    badge:    '/AVENORA/frontend/icons/icon-72.svg',
+    data:     { url: data.url || '/AVENORA/frontend/index.html' },
+    tag:      data.tag || 'avenora-notification',
     renotify: false,
   };
   event.waitUntil(self.registration.showNotification(title, options));
@@ -172,9 +256,9 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/';
+  const url = event.notification.data?.url || '/AVENORA/frontend/index.html';
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((clientList) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url === url && 'focus' in client) return client.focus();
       }

@@ -257,25 +257,30 @@
 
   <!-- ═══════ RUNTIME CONFIG ════════════════════════════════════ -->
   <!--
-    AVENORA API ENDPOINT CONFIGURATION
+    AVENORA PRODUCTION CONFIGURATION
     ────────────────────────────────────────────────────────────────
-    For local development:     apiUrl = 'http://localhost:3001/api'
-    For production deployment: apiUrl = 'https://your-backend.com/api'
-
-    The value '/api' works when the frontend and backend share a host
-    (e.g. behind a reverse proxy on the same domain). If they are on
-    different hosts you MUST use the full URL, e.g.:
-      window.LU_CONFIG = { apiUrl: 'https://api.avenora.app/api' };
-
-    Firebase project: avenora-6e147
+    Deployment: GitHub Pages  →  /AVENORA/frontend/
+    Firebase project:            avenora-6e147
     ────────────────────────────────────────────────────────────────
+    API base URL is set to the live Avenora backend.
+    Never use localhost, 127.0.0.1, or old Shadow Nexus URLs.
   -->
   <script>
-    window.LU_CONFIG = window.LU_CONFIG || {
-      // Change this to your deployed backend URL if not behind a reverse proxy.
-      // Example: 'https://api.avenora.app/api'
-      apiUrl:    '/api',
-      socketUrl: '',
+    // ── Build / version metadata ──────────────────────────────
+    window.AVENORA_BUILD = {
+      version:         '3.0.0',
+      buildTimestamp:  '2025-07-17T00:00:00Z',
+      swVersion:       'v3',
+      swCacheName:     'avenora-cache-v3',
+      apiBaseUrl:      'https://api.avenora.app/api',
+      firebaseProject: 'avenora-6e147',
+      basePath:        '/AVENORA/frontend/',
+    };
+
+    // ── Runtime API config ────────────────────────────────────
+    window.LU_CONFIG = {
+      apiUrl:    'https://api.avenora.app/api',
+      socketUrl: 'https://api.avenora.app',
     };
   </script>
 
@@ -329,13 +334,12 @@
   <!-- Avenora Companion (Easter egg) — loads after router so auth state is available -->
   <script src="src/components/companion/companion.js"></script>
 
-  <!-- Service Worker registration + PWA install prompt -->
+  <!-- Service Worker registration + PWA install prompt + SW update handler -->
   <script>
     // Capture PWA install prompt before it fires
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       window._pwaInstallPrompt = e;
-      // Show install hint in header if not already installed
       const hint = document.getElementById('pwa-install-hint');
       if (hint) hint.style.display = 'flex';
     });
@@ -348,7 +352,26 @@
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        // Path is relative to this HTML file's location — resolves to
+        // /AVENORA/frontend/sw.js which is within the /AVENORA/ scope.
+        navigator.serviceWorker.register('sw.js', { scope: '/AVENORA/' })
+          .then((reg) => {
+            console.log('[AVN] Service worker registered — scope:', reg.scope);
+          })
+          .catch((err) => {
+            console.warn('[AVN] Service worker registration failed:', err);
+          });
+
+        // Listen for the new SW telling us to reload for a fresh build.
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data?.type === 'SW_UPDATED') {
+            console.log('[AVN] New service worker active (' + event.data.cache + '). Reloading…');
+            // Only auto-reload if no user interaction is in progress
+            if (!document.hidden) {
+              window.location.reload();
+            }
+          }
+        });
       });
     }
   </script>

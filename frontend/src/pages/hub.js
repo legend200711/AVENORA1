@@ -36,6 +36,7 @@ registerPage('hub', {
       ${renderExploreSection(user)}
       ${renderAnnouncementsSection()}
       ${user ? renderCompactAccess(user) : ''}
+      ${renderBuildDiagnostics()}
       <div class="hub-footer">
         <p>AVENORA · A PLACE WHERE EVERYONE BELONGS</p>
       </div>
@@ -472,5 +473,56 @@ async function loadAnnouncements() {
 async function checkApiStatus() {
   // Status check is silent — results are only surfaced in admin diagnostics,
   // never shown to regular users.
+}
+
+/* ─── Build / PWA Diagnostic Panel ──────────────────────── */
+/**
+ * Renders a small, always-visible diagnostic strip at the bottom of the hub.
+ * Shows app version, build timestamp, API base URL, Firebase project ID,
+ * and service-worker version so you can confirm a fresh build is loaded.
+ * No private secrets are exposed here.
+ */
+function renderBuildDiagnostics() {
+  const b = window.AVENORA_BUILD || {};
+  const swStatus = ('serviceWorker' in navigator)
+    ? 'supported'
+    : 'not supported';
+  return `
+    <section class="hub-section hub-section-sm hub-diagnostics" aria-label="Build diagnostics" id="hub-diagnostics">
+      <details style="width:100%">
+        <summary style="cursor:pointer;font-size:0.75rem;color:var(--text-muted);letter-spacing:0.08em;user-select:none">
+          ▸ BUILD DIAGNOSTICS
+        </summary>
+        <div class="hub-diagnostics__grid" style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:0.72rem;color:var(--text-muted)">
+          <span style="color:var(--text-secondary)">App version</span>
+          <span id="diag-version">${escapeHtml(b.version || '—')}</span>
+
+          <span style="color:var(--text-secondary)">Build timestamp</span>
+          <span id="diag-build-ts">${escapeHtml(b.buildTimestamp || '—')}</span>
+
+          <span style="color:var(--text-secondary)">API base URL</span>
+          <span id="diag-api-url" style="word-break:break-all">${escapeHtml(b.apiBaseUrl || window.LU_CONFIG?.apiUrl || '—')}</span>
+
+          <span style="color:var(--text-secondary)">Firebase project</span>
+          <span id="diag-firebase">${escapeHtml(b.firebaseProject || '—')}</span>
+
+          <span style="color:var(--text-secondary)">SW version</span>
+          <span id="diag-sw-version">${escapeHtml(b.swVersion || '—')}</span>
+
+          <span style="color:var(--text-secondary)">SW cache name</span>
+          <span id="diag-sw-cache">${escapeHtml(b.swCacheName || '—')}</span>
+
+          <span style="color:var(--text-secondary)">SW support</span>
+          <span id="diag-sw-support">${swStatus}</span>
+
+          <span style="color:var(--text-secondary)">Base path</span>
+          <span id="diag-base-path">${escapeHtml(b.basePath || location.pathname)}</span>
+        </div>
+        <p style="margin-top:8px;font-size:0.68rem;color:var(--text-muted);opacity:0.6">
+          Visible to all users for deployment verification. No private secrets are shown here.
+        </p>
+      </details>
+    </section>
+  `;
 }
 
