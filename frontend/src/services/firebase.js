@@ -678,6 +678,7 @@
   // ═══════════════════════════════════════════════════════════════
   global.AvenoraFirebase = {
     getApp,
+    getFirebaseAuth,   // exposed so live.js can check auth.currentUser
     Auth:      FirebaseAuth,
     Firestore: FirestoreService,
     RTDB:      RTDBService,

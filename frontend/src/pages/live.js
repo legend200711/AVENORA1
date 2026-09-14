@@ -100,6 +100,7 @@ function _liveHubHTML() {
             </button>
           </div>
           <div id="avl-setup-err" style="color:#c0394a;font-size:0.85rem;margin-top:8px;display:none"></div>
+          <div id="avl-setup-diag" style="font-size:0.75rem;margin-top:6px;font-family:monospace;word-break:break-all;display:none"></div>
         </div>
       </div>
 
@@ -204,33 +205,160 @@ async function _liveHubInit(container) {
 
   AVLive.startLive = async function () {
     const title = (document.getElementById('avl-title')?.value || '').trim() || 'Avenora Live';
-    const btn = document.getElementById('avl-go-live-btn');
+    const btn   = document.getElementById('avl-go-live-btn');
     const errEl = document.getElementById('avl-setup-err');
+    const diagEl = document.getElementById('avl-setup-diag');
+
     errEl.style.display = 'none';
+    if (diagEl) diagEl.style.display = 'none';
     btn.disabled = true;
     btn.textContent = 'Starting…';
 
+    // ── Diagnostics (never show secrets) ──────────────────────────────
+    const diag = {
+      step:            'init',
+      firebaseProject: 'avenora-6e147',
+      authUser:        null,
+      uid:             null,
+      firebaseCurrentUser: null,
+      firestoreWrite:  null,
+      roomId:          null,
+      errorCode:       null,
+      errorMessage:    null,
+      errorStack:      null,
+    };
+
+    function _showDiag(msg, isError) {
+      if (!diagEl) return;
+      diagEl.style.display  = '';
+      diagEl.style.color    = isError ? '#c0394a' : '#7cb9e8';
+      diagEl.textContent    = msg;
+    }
+
+    function _showErr(friendly, technical) {
+      errEl.textContent   = friendly;
+      errEl.style.display = '';
+      _showDiag(technical, true);
+      console.error('[AVL] startLive failed', { ...diag, friendly, technical });
+      btn.disabled  = false;
+      btn.textContent = '🔴 GO LIVE';
+    }
+
     try {
+      // ── 1. Verify local user state ────────────────────────────────
+      diag.step    = 'auth-state-check';
+      diag.authUser = user ? (user.username || user.email || '(user object)') : null;
+      diag.uid      = user?.uid || user?.id || null;
+
+      if (!user || !diag.uid) {
+        _showErr(
+          'Please sign in to Avenora before going live.',
+          'Auth: no user in LegendState — uid missing'
+        );
+        return;
+      }
+
+      // ── 2. Verify Firebase currentUser (live token, not cached UID) ──
+      diag.step = 'firebase-current-user';
+      let fbCurrentUser = null;
+      try {
+        const fbAuth = await window.AvenoraFirebase.getFirebaseAuth?.();
+        fbCurrentUser = fbAuth?.currentUser || null;
+      } catch (authErr) {
+        diag.errorCode    = authErr.code || 'AUTH_LOAD_FAILED';
+        diag.errorMessage = authErr.message;
+      }
+      diag.firebaseCurrentUser = fbCurrentUser ? fbCurrentUser.uid : null;
+
+      if (!fbCurrentUser) {
+        _showErr(
+          'Please sign in to Avenora before going live.',
+          `Auth: Firebase currentUser is null — uid=${diag.uid} is from cache only. ` +
+          'Firebase session may have expired. Please sign out and sign in again.'
+        );
+        return;
+      }
+
+      // ── 3. Confirm the cached uid matches Firebase currentUser ───────
+      if (fbCurrentUser.uid !== diag.uid) {
+        console.warn(
+          '[AVL] UID mismatch: LegendState uid=' + diag.uid +
+          ' vs Firebase uid=' + fbCurrentUser.uid +
+          '. Using Firebase uid.'
+        );
+        diag.uid = fbCurrentUser.uid;
+      }
+
+      // ── 4. Write liveRooms document ──────────────────────────────────
+      diag.step = 'firestore-write';
+      _showDiag('Starting live session…', false);
+
       const fs = await _avlFirestore();
       const { collection, addDoc, serverTimestamp } = await _avlFSImports();
-      const roomRef = await addDoc(collection(fs, 'liveRooms'), {
-        title,
-        hostId:      user.uid || user.id || '',
+
+      const roomData = {
+        // Core identity fields required by Firestore rules and backend
+        ownerUid:    diag.uid,                                    // matches request.auth.uid for Firestore rules
+        hostId:      diag.uid,                                    // backward-compat alias
         hostName:    user.username || user.profile?.displayName || 'Creator',
         hostAvatar:  user.profile?.avatarUrl || '',
+        title,
+        platform:    'avenora',
         status:      'live',
         viewerCount: 0,
         likeCount:   0,
+        createdAt:   serverTimestamp(),
         startedAt:   serverTimestamp(),
+      };
+
+      let roomRef;
+      try {
+        roomRef = await addDoc(collection(fs, 'liveRooms'), roomData);
+      } catch (fsErr) {
+        diag.errorCode    = fsErr.code   || 'FIRESTORE_WRITE_FAILED';
+        diag.errorMessage = fsErr.message;
+        diag.errorStack   = fsErr.stack?.split('\n').slice(0, 4).join(' | ');
+        diag.firestoreWrite = 'failed';
+
+        let hint = '';
+        if (fsErr.code === 'permission-denied') {
+          hint = ' — Firestore permission-denied: Firebase auth.uid must match hostId field. ' +
+                 'Check firestore.rules liveRooms create rule.';
+        } else if (fsErr.code === 'unauthenticated') {
+          hint = ' — Firestore unauthenticated: Firebase session token is missing or invalid.';
+        }
+
+        _showErr(
+          'Could not start live stream. Please try again.',
+          `Firestore write failed: ${fsErr.code || 'unknown'} — ${fsErr.message}${hint}`
+        );
+        return;
+      }
+
+      diag.firestoreWrite = 'success';
+      diag.roomId         = roomRef.id;
+      diag.step           = 'complete';
+
+      console.info('[AVL] Live session created', {
+        roomId:          roomRef.id,
+        uid:             diag.uid,
+        firebaseProject: diag.firebaseProject,
+        title,
       });
+
       _stopPreview();
       navigateTo(`live-room/${roomRef.id}`);
+
     } catch (err) {
-      console.error('[AVL] Failed to start live:', err);
-      errEl.textContent = 'Could not start live stream. Please try again.';
-      errEl.style.display = '';
-      btn.disabled = false;
-      btn.textContent = '🔴 GO LIVE';
+      diag.errorCode    = err.code    || 'UNEXPECTED_ERROR';
+      diag.errorMessage = err.message;
+      diag.errorStack   = err.stack?.split('\n').slice(0, 4).join(' | ');
+      console.error('[AVL] startLive unexpected error', { ...diag, err });
+      _showErr(
+        'Could not start live stream. Please try again.',
+        `${diag.step}: ${err.message || 'Unexpected error'}` +
+        (err.code ? ` (${err.code})` : '')
+      );
     }
   };
 
