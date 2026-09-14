@@ -259,7 +259,7 @@
   <!--
     AVENORA PRODUCTION CONFIGURATION
     ────────────────────────────────────────────────────────────────
-    Deployment: GitHub Pages  →  /AVENORA1/frontend/
+    Deployment: GitHub Pages  →  /AVENORA/
     Firebase project:            avenora-6e147
     ────────────────────────────────────────────────────────────────
     API base URL is set to the live Avenora backend.
@@ -274,7 +274,7 @@
       swCacheName:     'avenora-cache-v3',
       apiBaseUrl:      'https://api.avenora.app/api',
       firebaseProject: 'avenora-6e147',
-      basePath:        '/AVENORA1/frontend/',
+      basePath:        '/AVENORA/',
     };
 
     // ── Runtime API config ────────────────────────────────────
@@ -353,8 +353,8 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         // Path is relative to this HTML file's location — resolves to
-        // /AVENORA1/frontend/sw.js which is within the /AVENORA1/ scope.
-        navigator.serviceWorker.register('sw.js', { scope: '/AVENORA1/' })
+        // /AVENORA/sw.js which is within the /AVENORA/ scope.
+        navigator.serviceWorker.register('sw.js', { scope: '/AVENORA/' })
           .then((reg) => {
             console.log('[AVN] Service worker registered — scope:', reg.scope);
           })
