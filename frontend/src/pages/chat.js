@@ -218,7 +218,12 @@ const ChatState = {
 
   // ─── Socket connection ───────────────────────────────────────
   _connectSocket() {
-    const socketUrl = window.LU_CONFIG?.socketUrl || 'http://localhost:3001';
+    const socketUrl = window.LU_CONFIG?.socketUrl || null;
+    if (!socketUrl) {
+      console.error('[AVENORA] Chat socket URL not configured. Set window.LU_CONFIG.socketUrl in index.html.');
+      this._updateStatus('Offline');
+      return;
+    }
     if (typeof io !== 'undefined') {
       this._setupSocket(socketUrl);
       return;

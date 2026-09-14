@@ -140,7 +140,8 @@
   // ── Load from server, apply, cache ───────────────────────
   async function loadAndApplyActive() {
     try {
-      const BASE = (window.LU_CONFIG && window.LU_CONFIG.apiUrl) || 'http://localhost:3001/api';
+      const BASE = (window.LU_CONFIG && window.LU_CONFIG.apiUrl) || null;
+      if (!BASE) return; // API not configured — keep cached theme
       const res  = await fetch(`${BASE}/themes/active`);
       if (!res.ok) return;
       const data = await res.json();

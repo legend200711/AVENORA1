@@ -38,15 +38,8 @@ const storiesRoutes = require('./api/routes/stories');
 const companionRoutes = require('./api/routes/companion');
 const preferencesRoutes = require('./api/routes/preferences');
 
-// DISABLED: Avenora Cloud Stream (cloudstream-worker.js + 24-hour-cloud-stream/)
-// is the active implementation. The Node.js ffmpeg/RTMP backend service is no longer
-// started from here.  The route file is preserved but not mounted.
-// const cloudStreamRoutes = require('./api/routes/cloudStream');
-
-// DISABLED: Avenora Live (live.html / live-hub.html / live-room.html)
-// is the active implementation using Firebase RTDB WebRTC signaling.
-// The WHIP/MediaMTX route is preserved but not mounted.
-// const liveRoutes = require('./api/routes/live');
+const cloudStreamRoutes = require('./api/routes/cloudStream');
+const liveRoutes = require('./api/routes/live');
 
 // Middleware
 const { globalRateLimiter } = require('./api/middleware/rateLimiter');
@@ -116,9 +109,8 @@ app.use('/api/stories', storiesRoutes);
 app.use('/api/companion', companionRoutes);
 app.use('/api/preferences', preferencesRoutes);
 
-// DISABLED — see comments above.
-// app.use('/api/admin/cloud-stream', cloudStreamRoutes);
-// app.use('/api/live', liveRoutes);
+app.use('/api/admin/cloud-stream', cloudStreamRoutes);
+app.use('/api/live', liveRoutes);
 
 // ─── Public: Published Theme Tokens (no auth required) ───────
 // Returns only the CSS token values of the current live theme.

@@ -1,9 +1,13 @@
 /**
  * AVENORA - API Client Service
  * All backend communication goes through this module.
- * Swap the BASE_URL to point to your deployed backend.
  *
- * Auth is now handled by Firebase Authentication (AvenoraFirebase.Auth).
+ * API endpoint resolution order:
+ *   1. window.LU_CONFIG.apiUrl  (injected by index.html at runtime)
+ *   2. VITE_API_BASE_URL build-time env var (if using Vite)
+ *   3. Configuration error — shown in console; requests will fail clearly.
+ *
+ * Auth is handled by Firebase Authentication (AvenoraFirebase.Auth).
  * The TokenStore shim below reads the Firebase UID so that isLoggedIn()
  * keeps working for all callers without changes.
  */
@@ -11,7 +15,34 @@
 (function (global) {
   'use strict';
 
-  const BASE_URL = (window.LU_CONFIG && window.LU_CONFIG.apiUrl) || 'http://localhost:3001/api';
+  // ─── Central API base URL ─────────────────────────────────
+  // Priority: runtime config → build-time env var → error
+  // Accepts relative URLs (e.g. '/api') for same-host deployments,
+  // or absolute URLs (e.g. 'https://api.avenora.app/api') for cross-host.
+  const _rawApiUrl =
+    (window.LU_CONFIG && window.LU_CONFIG.apiUrl) ||
+    (typeof __VITE_API_BASE_URL__ !== 'undefined' ? __VITE_API_BASE_URL__ : null) ||
+    null;
+
+  let BASE_URL;
+  if (_rawApiUrl) {
+    // Strip trailing slash
+    let _url = String(_rawApiUrl).replace(/\/$/, '');
+    // If it's a relative path that doesn't end with /api, append it
+    if (!_url.endsWith('/api') && !_url.match(/\/api\//)) {
+      _url = _url + '/api';
+    }
+    BASE_URL = _url;
+  } else {
+    BASE_URL = null;
+    console.error(
+      '[AVENORA] ⚠️  Avenora API endpoint is not configured.\n' +
+      '  Set window.LU_CONFIG = { apiUrl: "https://your-backend/api" } in index.html,\n' +
+      '  or set VITE_API_BASE_URL=https://your-backend in your .env file.\n' +
+      '  All API requests will fail until this is resolved.\n' +
+      '  See backend/.env.example for configuration reference.'
+    );
+  }
 
   // ─── Token management (Firebase shim) ─────────────────────
   // Firebase manages its own ID tokens; we keep the UID in storage
@@ -35,7 +66,26 @@
   let refreshQueue = [];
 
   async function request(method, path, opts = {}) {
+    // Guard: fail fast and clearly if the API is not configured
+    if (!BASE_URL) {
+      const user = window.AvenoraFirebase?.Auth?.getUser?.() || null;
+      const uid  = user?.uid || user?.id || null;
+      const cfgErr = new Error(
+        '[AVENORA] Avenora API endpoint is not configured. ' +
+        'Set window.LU_CONFIG = { apiUrl: "https://your-backend/api" } in index.html ' +
+        'or VITE_API_BASE_URL in your .env file.'
+      );
+      cfgErr.code = 'API_NOT_CONFIGURED';
+      console.error(
+        '[AVENORA] API request blocked — endpoint not configured',
+        { method, path, firebaseAuthState: !!uid, uid }
+      );
+      throw cfgErr;
+    }
+
+    const fullUrl = `${BASE_URL}${path}`;
     const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+
     // Prefer a fresh Firebase ID token; fall back to stored JWT for legacy backend calls
     let token = null;
     if (window.AvenoraFirebase?.Auth) {
@@ -44,6 +94,10 @@
     if (!token) token = TokenStore.getAccess();
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
+    // Diagnostic: log the current auth state
+    const _user = window.AvenoraFirebase?.Auth?.getUser?.() || null;
+    const _uid  = _user?.uid || _user?.id || null;
+
     const config = {
       method,
       headers,
@@ -51,7 +105,16 @@
     };
     if (opts.body && method !== 'GET') config.body = JSON.stringify(opts.body);
 
-    let res = await fetch(`${BASE_URL}${path}`, config);
+    let res;
+    try {
+      res = await fetch(fullUrl, config);
+    } catch (networkErr) {
+      console.error(
+        `[AVENORA] Network error — ${method} ${fullUrl}`,
+        { firebaseAuthState: !!_uid, uid: _uid, error: networkErr.message }
+      );
+      throw networkErr;
+    }
 
     // Auto-refresh on 401
     if (res.status === 401 && TokenStore.getRefresh() && !opts._retried) {
@@ -91,6 +154,19 @@
     }
 
     if (!res.ok) {
+      // Detailed diagnostic log — always show in console regardless of page-level error handling
+      console.error(
+        `[AVENORA] API error — ${method} ${fullUrl}`,
+        {
+          status:            res.status,
+          statusText:        res.statusText,
+          responseBody:      data,
+          firebaseAuthState: !!_uid,
+          uid:               _uid,
+          errorMessage:      data?.message || `HTTP ${res.status}`,
+          errorCode:         data?.code,
+        }
+      );
       const err = new Error(data?.message || `Request failed: ${res.status}`);
       err.status = res.status;
       err.code = data?.code;
@@ -109,11 +185,16 @@
 
   // ─── Upload (multipart) ───────────────────────────────────
   async function upload(path, formData) {
+    if (!BASE_URL) {
+      console.error('[AVENORA] Upload blocked — API endpoint not configured', { path });
+      throw new Error('[AVENORA] Avenora API endpoint is not configured.');
+    }
     const token = TokenStore.getAccess();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const res = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers, body: formData });
+    const fullUrl = `${BASE_URL}${path}`;
+    const res = await fetch(fullUrl, { method: 'POST', headers, body: formData });
     const data = await res.json();
     if (!res.ok) {
       const err = new Error(data?.message || 'Upload failed');
@@ -634,7 +715,10 @@
     rollback:       (id)            => post(`/admin/themes/${id}/rollback`, {}),
     delete:         (id)            => del(`/admin/themes/${id}`),
     // Public endpoint — no auth required, used on every page load
-    active:         ()              => fetch(`${BASE_URL}/themes/active`).then(r => r.json()).catch(() => ({ success: false, theme: null })),
+    active: () => {
+      if (!BASE_URL) return Promise.resolve({ success: false, theme: null });
+      return fetch(`${BASE_URL}/themes/active`).then(r => r.json()).catch(() => ({ success: false, theme: null }));
+    },
   };
 
   // ─── Cloud Stream API ─────────────────────────────────────
@@ -662,7 +746,11 @@
 
   // ─── Health ───────────────────────────────────────────────
   const HealthAPI = {
-    check: () => fetch(`${BASE_URL.replace('/api', '')}/api/health`).then(r => r.json()).catch(() => ({ status: 'error' })),
+    check: () => {
+      if (!BASE_URL) return Promise.resolve({ status: 'error', error: 'API endpoint not configured' });
+      const healthUrl = BASE_URL.replace(/\/api$/, '') + '/api/health';
+      return fetch(healthUrl).then(r => r.json()).catch(() => ({ status: 'error' }));
+    },
   };
 
   // ─── Companion API ────────────────────────────────────────

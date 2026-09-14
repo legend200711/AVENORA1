@@ -256,8 +256,24 @@
   </div>
 
   <!-- ═══════ RUNTIME CONFIG ════════════════════════════════════ -->
+  <!--
+    AVENORA API ENDPOINT CONFIGURATION
+    ────────────────────────────────────────────────────────────────
+    For local development:     apiUrl = 'http://localhost:3001/api'
+    For production deployment: apiUrl = 'https://your-backend.com/api'
+
+    The value '/api' works when the frontend and backend share a host
+    (e.g. behind a reverse proxy on the same domain). If they are on
+    different hosts you MUST use the full URL, e.g.:
+      window.LU_CONFIG = { apiUrl: 'https://api.avenora.app/api' };
+
+    Firebase project: avenora-6e147
+    ────────────────────────────────────────────────────────────────
+  -->
   <script>
     window.LU_CONFIG = window.LU_CONFIG || {
+      // Change this to your deployed backend URL if not behind a reverse proxy.
+      // Example: 'https://api.avenora.app/api'
       apiUrl:    '/api',
       socketUrl: '',
     };

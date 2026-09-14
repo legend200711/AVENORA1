@@ -28,6 +28,98 @@
           }
         }
       }
+    },
+
+    "liveConnections": {
+      "$roomId": {
+        ".read": "auth != null",
+        "viewers": {
+          "$viewerUid": {
+            ".read": "auth != null",
+            "offer": {
+              ".write": "auth != null && auth.uid == $viewerUid"
+            },
+            "answer": {
+              ".write": "auth != null && auth.uid == $roomId"
+            },
+            "viewerIce": {
+              ".write": "auth != null && auth.uid == $viewerUid"
+            },
+            "hostIce": {
+              ".write": "auth != null && auth.uid == $roomId"
+            },
+            "$other": {
+              ".write": "auth != null && (auth.uid == $viewerUid || auth.uid == $roomId)"
+            }
+          }
+        }
+      }
+    },
+
+    "livePresence": {
+      "$roomId": {
+        ".read": "auth != null",
+        "host": {
+          ".write": "auth != null && auth.uid == $roomId"
+        },
+        "viewers": {
+          "$viewerUid": {
+            ".write": "auth != null && auth.uid == $viewerUid"
+          }
+        }
+      }
+    },
+
+    "liveSignaling": {
+      "$roomId": {
+        ".read": "auth != null",
+        "viewers": {
+          "$viewerUid": {
+            ".read": "auth != null",
+            "offer": {
+              ".write": "auth != null && auth.uid == $viewerUid"
+            },
+            "answer": {
+              ".write": "auth != null && auth.uid == $roomId"
+            },
+            "viewerIce": {
+              ".write": "auth != null && auth.uid == $viewerUid"
+            },
+            "hostIce": {
+              ".write": "auth != null && auth.uid == $roomId"
+            }
+          }
+        }
+      }
+    },
+
+    "guestSignaling": {
+      "$roomId": {
+        ".read": "auth != null",
+        "$guestUid": {
+          ".write": "auth != null && (auth.uid == $guestUid || auth.uid == $roomId)"
+        }
+      }
+    },
+
+    "guestViewerSignaling": {
+      "$roomId": {
+        ".read": "auth != null",
+        "$guestUid": {
+          "$viewerUid": {
+            ".write": "auth != null && (auth.uid == $guestUid || auth.uid == $roomId || auth.uid == $viewerUid)"
+          }
+        }
+      }
+    },
+
+    "liveGuests": {
+      "$roomId": {
+        ".read": "auth != null",
+        "$guestUid": {
+          ".write": "auth != null && (auth.uid == $guestUid || auth.uid == $roomId)"
+        }
+      }
     }
   }
 }

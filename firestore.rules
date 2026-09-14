@@ -60,6 +60,39 @@ service cloud.firestore {
             || isModeratorOrAbove());
     }
 
+    // ── Live Rooms ─────────────────────────────────────────
+    // Created by the host when starting a live session (via live-room.html / live.js).
+    // All users can read (for the live hub listing).
+    // Only the room owner (hostId == auth.uid) may write metadata.
+    // Live chat sub-collection is open to all authenticated users.
+    match /liveRooms/{roomId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.hostId == request.auth.uid;
+      allow update: if request.auth != null
+        && (resource.data.hostId == request.auth.uid
+            || isModeratorOrAbove());
+      allow delete: if request.auth != null
+        && (resource.data.hostId == request.auth.uid
+            || isModeratorOrAbove());
+
+      // Live chat messages
+      match /liveMessages/{msgId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow delete: if request.auth != null
+          && (resource.data.authorId == request.auth.uid
+              || isModeratorOrAbove());
+      }
+    }
+
+    // ── Site Settings (kill-switches, feature flags) ───────
+    // Read by anyone; only writable by founder/admin via the backend.
+    match /siteSettings/{docId} {
+      allow read: if true;
+      allow write: if false; // managed exclusively by the backend / Founder Control Center
+    }
+
     // ── Founder Themes ─────────────────────────────────────
     // No ordinary user or moderator may read, write, or list founder themes.
     // Theme tokens are served from the backend API (/api/themes/active)

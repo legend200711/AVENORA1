@@ -1618,7 +1618,9 @@ function initUploadForm() {
       // Real XHR for progress tracking
       const uploadResult = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${(window.LU_CONFIG?.apiUrl || 'http://localhost:3001/api')}/videos/upload`);
+        const _apiBase = window.LU_CONFIG?.apiUrl || null;
+        if (!_apiBase) { reject(new Error('[AVENORA] API endpoint not configured')); return; }
+        xhr.open('POST', `${_apiBase}/videos/upload`);
         const token = LegendAPI.TokenStore.getAccess();
         if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 

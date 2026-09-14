@@ -1,27 +1,25 @@
 /**
- * Avenora — Cloud Radio
+ * Avenora — 24-Hour Cloud Stream
  * cloud-stream.js
  *
  * Handles:
  *   - Creator dashboard: start / manage / stop a 24-hour cloud broadcast
- *   - Listener player: real-time synchronized playback from the cloud worker
+ *   - Listener player: real-time synchronized playback from the Avenora backend
  *   - Real-time Now Playing sync via Firestore studioCloudStreamMusic
  *   - Duplicate stream prevention
  *   - Test mode (5-minute broadcasts, founder-only)
  *
  * Architecture:
- *   Creator configures → Cloudflare Worker (snx-cloudstream) starts
- *   Worker Durable Object alarms advance tracks every N seconds
- *   Worker writes Now Playing → studioCloudStreamMusic/{streamId}
+ *   Creator configures → Avenora backend Cloud Stream service starts
+ *   Backend writes Now Playing → studioCloudStreamMusic/{streamId}
  *   Listeners subscribe to that Firestore doc and seek to synchronized position
- *   Audio files served directly from Cloudflare R2 CDN
+ *   Audio files served directly from the configured CDN
  *
- * Collections used (no new collections):
- *   cloudStreams/{streamId}         — broadcast record
- *   studioCloudStreamMusic/{streamId} — live Now Playing (worker-owned)
+ * Collections used:
+ *   cloudStreams/{streamId}             — broadcast record
+ *   studioCloudStreamMusic/{streamId}   — live Now Playing (backend-owned)
  *   studioPlaylists/{uid}/playlists/{plId} — creator's playlists
  *   cloudStreamTracks/{uid}/tracks/{trackId} — creator's track library
- *   liveRooms/{uid}                 — feed entry (live discovery)
  */
 
 'use strict';
@@ -38,15 +36,16 @@ import {
   serverTimestamp, documentId
 } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
-/* ── Firebase config (matches firebase-config.js) ─────────────────── */
+/* ── Firebase config — Avenora (avenora-6e147) ─────────────────────── */
 const _CFG = {
-  apiKey:            'AIzaSyByZRmp6R9HY17T2_WdJUFWeeaLNOP6y2Y',
-  authDomain:        'horr-a08f4.firebaseapp.com',
-  databaseURL:       'https://horr-a08f4-default-rtdb.firebaseio.com',
-  projectId:         'horr-a08f4',
-  storageBucket:     'horr-a08f4.firebasestorage.app',
-  messagingSenderId: '933810617818',
-  appId:             '1:933810617818:web:efb24f123337dd987c14e3',
+  apiKey:            'AIzaSyDnEEYamIVYfn7l6sPPS1Dp2fWJE34OXlI',
+  authDomain:        'avenora-6e147.firebaseapp.com',
+  databaseURL:       'https://avenora-6e147-default-rtdb.firebaseio.com',
+  projectId:         'avenora-6e147',
+  storageBucket:     'avenora-6e147.firebasestorage.app',
+  messagingSenderId: '389692647062',
+  appId:             '1:389692647062:web:6a2dd06ade8bc92d3e84b7',
+  measurementId:     'G-7ESV78Q6J3',
 };
 
 const _app  = getApps().length ? getApp() : initializeApp(_CFG);
@@ -55,8 +54,24 @@ const _db   = getFirestore(_app);
 
 setPersistence(_auth, browserLocalPersistence).catch(() => {});
 
-/* ── Worker URL ──────────────────────────────────────────────────────── */
-const WORKER_URL = 'https://snx-cloudstream.nthntjrn.workers.dev';
+/* ── Avenora Backend URL ─────────────────────────────────────────────── */
+// Resolved from runtime config (set by index.html or the page that hosts this).
+// If not configured, cloud stream API calls will log a clear error.
+const _BACKEND_BASE_URL =
+  (typeof window !== 'undefined' && window.LU_CONFIG && window.LU_CONFIG.apiUrl)
+    ? window.LU_CONFIG.apiUrl.replace(/\/api\/?$/, '')
+    : null;
+
+const WORKER_URL = _BACKEND_BASE_URL
+  ? _BACKEND_BASE_URL
+  : (() => {
+      console.error(
+        '[AVENORA] ⚠️  Cloud Stream: backend URL is not configured.\n' +
+        '  Set window.LU_CONFIG = { apiUrl: "https://your-backend/api" } in the page.\n' +
+        '  Cloud Stream API calls will fail until this is resolved.'
+      );
+      return null;
+    })();
 
 /* ═══════════════════════════════════════════════════════
    STATE

@@ -1,16 +1,16 @@
 /**
  * Avenora Live — live.js
  *
- * Firebase split architecture:
+ * Firebase architecture — single project: avenora-6e147
  *
- *  MAIN Firebase (horr-a08f4) — Firestore:
+ *  Firestore (avenora-6e147):
  *    - Auth / user profiles
  *    - Feed posts, stories, notifications
  *    - Live chat messages  (liveRooms/{roomId}/liveMessages)
  *    - Likes counter       (liveRooms/{roomId}.likes)
+ *    - Live room metadata  (liveRooms/{roomId})
  *
- *  LIVE Firebase (Avenora Live) — Realtime Database:
- *    - Room status             (liveRooms/{roomId})
+ *  Realtime Database (avenora-6e147):
  *    - WebRTC per-viewer slots (liveConnections/{roomId}/viewers/{viewerUid})
  *      host writes offer+hostCandidates; viewer writes answer+viewerCandidates
  *    - Guest box signaling     (guestSignaling/{roomId}/{guestUid})
@@ -20,16 +20,16 @@
  *
  *  HOST (creator):
  *    1. Captures local camera + mic via getUserMedia.
- *    2. Creates liveRooms/{roomId} in RTDB (status: 'live').
- *    3. Listens on liveConnections/{roomId}/viewers — creates a dedicated
+ *    2. Creates liveRooms/{roomId} in Firestore (status: 'live').
+ *    3. Uses RTDB liveConnections/{roomId}/viewers — creates a dedicated
  *       RTCPeerConnection per viewer, sends individual offer.  Each viewer
  *       gets their own signaling slot → no collision between viewers.
  *    4. When a guest is accepted, relays their stream to all current viewers
  *       via guestViewerSignaling/{roomId}/{guestUid}/{viewerUid}.
  *
  *  VIEWER:
- *    1. Reads liveRooms/{roomId} from RTDB to confirm stream is live.
- *    2. Writes {sessionId} to liveConnections/{roomId}/viewers/{viewerUid}.
+ *    1. Reads liveRooms/{roomId} from Firestore to confirm stream is live.
+ *    2. Writes {sessionId} to liveConnections/{roomId}/viewers/{viewerUid} in RTDB.
  *    3. Host detects the entry and writes an offer to that slot.
  *    4. Viewer answers and receives the host stream.
  *    5. For each active guest in liveGuests, viewer subscribes to
@@ -72,14 +72,16 @@ import {
    default app.  Always reuse the existing [DEFAULT]
    app so Auth shares the same persisted session.
    ════════════════════════════════════════════════════ */
+/* ── Avenora Firebase config (avenora-6e147) ── */
 const _CFG = {
-  apiKey:            'AIzaSyByZRmp6R9HY17T2_WdJUFWeeaLNOP6y2Y',
-  authDomain:        'horr-a08f4.firebaseapp.com',
-  databaseURL:       'https://horr-a08f4-default-rtdb.firebaseio.com',
-  projectId:         'horr-a08f4',
-  storageBucket:     'horr-a08f4.firebasestorage.app',
-  messagingSenderId: '933810617818',
-  appId:             '1:933810617818:web:efb24f123337dd987c14e3',
+  apiKey:            'AIzaSyDnEEYamIVYfn7l6sPPS1Dp2fWJE34OXlI',
+  authDomain:        'avenora-6e147.firebaseapp.com',
+  databaseURL:       'https://avenora-6e147-default-rtdb.firebaseio.com',
+  projectId:         'avenora-6e147',
+  storageBucket:     'avenora-6e147.firebasestorage.app',
+  messagingSenderId: '389692647062',
+  appId:             '1:389692647062:web:6a2dd06ade8bc92d3e84b7',
+  measurementId:     'G-7ESV78Q6J3',
 };
 
 /* Reuse the existing [DEFAULT] app if it is already initialised
