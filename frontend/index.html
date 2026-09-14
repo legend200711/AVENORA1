@@ -259,7 +259,7 @@
   <!--
     AVENORA PRODUCTION CONFIGURATION
     ────────────────────────────────────────────────────────────────
-    Deployment: GitHub Pages  →  https://legend200711.github.io/AVENORA1/
+    Deployment: GitHub Pages  →  https://legend200711.github.io/AVENORA/
     Firebase project:            avenora-6e147
     ────────────────────────────────────────────────────────────────
     API base URL is set to the live Avenora backend.
@@ -268,13 +268,13 @@
   <script>
     // ── Build / version metadata ──────────────────────────────
     window.AVENORA_BUILD = {
-      version:         '3.0.1',
-      buildTimestamp:  '2025-07-17T14:00:00Z',
-      swVersion:       'v4',
-      swCacheName:     'avenora-cache-v4',
+      version:         '3.0.2',
+      buildTimestamp:  '2025-07-19T00:00:00Z',
+      swVersion:       'v5',
+      swCacheName:     'avenora-cache-v5',
       apiBaseUrl:      'https://api.avenora.app/api',
       firebaseProject: 'avenora-6e147',
-      basePath:        '/AVENORA1/',
+      basePath:        '/AVENORA/',
     };
 
     // ── Runtime API config ────────────────────────────────────
@@ -340,7 +340,7 @@
   <script>
   (function() {
     'use strict';
-    var BASE = '/AVENORA1/';
+    var BASE = '/AVENORA/';
     var sheets = [
       BASE + 'src/styles/theme.css',
       BASE + 'src/styles/visual.css',
@@ -444,8 +444,8 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         // Path is relative to this HTML file's location — resolves to
-        // /AVENORA1/sw.js which is within the /AVENORA1/ scope.
-        navigator.serviceWorker.register('sw.js', { scope: '/AVENORA1/' })
+        // /AVENORA/sw.js which is within the /AVENORA/ scope.
+        navigator.serviceWorker.register('sw.js', { scope: '/AVENORA/' })
           .then((reg) => {
             console.log('[AVN] Service worker registered — scope:', reg.scope);
           })

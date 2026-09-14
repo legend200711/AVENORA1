@@ -1,8 +1,8 @@
 /**
- * AVENORA — Service Worker v3
+ * AVENORA — Service Worker v5
  *
- * Deployment base: /AVENORA1/
- * GitHub Pages URL: https://legend200711.github.io/AVENORA1/
+ * Deployment base: /AVENORA/
+ * GitHub Pages URL: https://legend200711.github.io/AVENORA/
  *
  * Rules:
  *   • NEVER cache: API responses, Firebase data, auth responses,
@@ -33,9 +33,9 @@ _messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title || 'AVENORA';
   const options = {
     body:     payload.notification?.body || 'You have a new notification',
-    icon:     '/AVENORA1/icons/icon-192.svg',
-    badge:    '/AVENORA1/icons/icon-72.svg',
-    data:     { url: payload.data?.url || '/AVENORA1/index.html' },
+    icon:     '/AVENORA/icons/icon-192.svg',
+    badge:    '/AVENORA/icons/icon-72.svg',
+    data:     { url: payload.data?.url || '/AVENORA/index.html' },
     tag:      payload.data?.tag || 'avenora-notification',
     renotify: false,
   };
@@ -44,17 +44,18 @@ _messaging.onBackgroundMessage((payload) => {
 
 // ── Cache identity ───────────────────────────────────────────────────────────
 // SW_VERSION is embedded at build time so the diagnostic panel can read it.
-const SW_VERSION  = 'v4';
-const CACHE_NAME  = 'avenora-cache-v4';
+const SW_VERSION  = 'v5';
+const CACHE_NAME  = 'avenora-cache-v5';
 
 // Prefixes of ALL old caches that must be wiped on activate.
 // Covers every previous Avenora and Shadow Nexus name that may be installed
 // on a user's device.
 const OLD_CACHE_PREFIXES = [
   'avenora-v',        // avenora-v1, avenora-v2
-  'avenora-cache-v1', // exact names below v4
+  'avenora-cache-v1', // exact names below v5
   'avenora-cache-v2',
-  'avenora-cache-v3', // v3 had wrong BASE path /AVENORA (missing 1) — evict
+  'avenora-cache-v3', // v3 had wrong BASE path — evict
+  'avenora-cache-v4', // v4 had wrong /AVENORA1/ base path — evict
   'legend-cache',     // old legend-universe names
   'shadow-nexus',     // old Shadow Nexus caches
   'snx-cache',
@@ -62,9 +63,9 @@ const OLD_CACHE_PREFIXES = [
 ];
 
 // ── Static assets to pre-cache ────────────────────────────────────────────────
-// All paths are relative to the SW scope (/AVENORA1/).
+// All paths are relative to the SW scope (/AVENORA/).
 // Do NOT list API URLs, Firebase URLs, or any runtime-fetched data here.
-const BASE = '/AVENORA1';
+const BASE = '/AVENORA';
 const STATIC_ASSETS = [
   `${BASE}/index.html`,
   `${BASE}/offline.html`,
@@ -246,9 +247,9 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'AVENORA';
   const options = {
     body:     data.body || 'You have a new notification',
-    icon:     '/AVENORA1/icons/icon-192.svg',
-    badge:    '/AVENORA1/icons/icon-72.svg',
-    data:     { url: data.url || '/AVENORA1/index.html' },
+    icon:     '/AVENORA/icons/icon-192.svg',
+    badge:    '/AVENORA/icons/icon-72.svg',
+    data:     { url: data.url || '/AVENORA/index.html' },
     tag:      data.tag || 'avenora-notification',
     renotify: false,
   };
@@ -257,7 +258,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/AVENORA1/index.html';
+  const url = event.notification.data?.url || '/AVENORA/index.html';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
