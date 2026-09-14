@@ -28,10 +28,17 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Add .nojekyll to prevent Jekyll processing
+        # Prevents GitHub Pages Jekyll from ignoring files/dirs with underscores
+        # (e.g. frontend/src/) and from transforming the static app.
+        run: touch frontend/.nojekyll
+
       - name: Upload frontend as Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Deploy only the frontend directory — not the repo root
+          # Deploy the frontend/ directory — the real Avenora app entry point.
+          # frontend/index.html is the actual app (not the README).
+          # No build step needed — this is a vanilla JS SPA.
           path: frontend
 
       - name: Deploy to GitHub Pages

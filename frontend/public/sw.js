@@ -2,13 +2,13 @@
  * AVENORA — Service Worker v3 (public/ copy)
  *
  * This file is a redirect stub. The canonical SW is at:
- *   /AVENORA1/sw.js
+ *   /AVENORA/sw.js
  *
  * This stub exists only to unregister any old SW registrations that may
  * have been made from this path, and to instruct the browser to use the
  * correct canonical SW instead.
  *
- * Deployment base: /AVENORA1/
+ * Deployment base: /AVENORA/
  */
 
 // ── Cache identity ───────────────────────────────────────────────────────────
@@ -53,5 +53,5 @@ self.addEventListener('activate', (event) => {
 // ── Fetch: pass everything through (no caching in stub) ──────────────────────
 self.addEventListener('fetch', () => {
   // Pass all requests straight to the network — the canonical SW at
-  // /AVENORA1/sw.js handles caching.
+  // /AVENORA/sw.js handles caching.
 });
