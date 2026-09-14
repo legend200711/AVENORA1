@@ -28,8 +28,10 @@
   let currentCleanup = null;
 
   function getPageFromHash() {
-    const hash = location.hash.replace('#', '').split('/')[0] || defaultPage;
-    return hash;
+    const hash = location.hash.replace('#', '') || defaultPage;
+    // Support sub-routes: #live-room/abc123 → page 'live-room'
+    const segments = hash.split('/');
+    return segments[0] || defaultPage;
   }
 
   function navigateTo(page, params = {}) {
@@ -60,6 +62,7 @@
       social: 'FEED',
       video: 'VIDEO',
       live: 'LIVE',
+      'live-room': 'LIVE ROOM',
       cloudstream: 'CLOUD STREAM',
       dj: 'DJ SYSTEM',
       music: 'MUSIC HUB',
