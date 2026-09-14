@@ -1,0 +1,689 @@
+/**
+ * AVENORA — Firebase Service
+ * Central initialisation of every Firebase product used by the app.
+ * Exposed on window.AvenoraFirebase so all other modules can import
+ * individual service handles without re-initialising.
+ *
+ * Products wired up here:
+ *   • Firebase App (core)
+ *   • Authentication
+ *   • Firestore
+ *   • Realtime Database
+ *   • Storage
+ *   • Analytics
+ *   • Cloud Messaging (FCM)
+ */
+
+(function (global) {
+  'use strict';
+
+  // ─── Config ───────────────────────────────────────────────────
+  const firebaseConfig = {
+    apiKey:            'AIzaSyDnEEYamIVYfn7l6sPPS1Dp2fWJE34OXlI',
+    authDomain:        'avenora-6e147.firebaseapp.com',
+    databaseURL:       'https://avenora-6e147-default-rtdb.firebaseio.com',
+    projectId:         'avenora-6e147',
+    storageBucket:     'avenora-6e147.firebasestorage.app',
+    messagingSenderId: '389692647062',
+    appId:             '1:389692647062:web:6a2dd06ade8bc92d3e84b7',
+    measurementId:     'G-7ESV78Q6J3',
+  };
+
+  // ─── SDK version (keep in sync with index.html imports) ───────
+  const SDK_VER = '10.12.2';
+  const CDN = `https://www.gstatic.com/firebasejs/${SDK_VER}`;
+
+  // ─── Lazy module loader ────────────────────────────────────────
+  // We load each Firebase ESM module on-demand via dynamic import.
+  // The returned promise is cached so the module is only fetched once.
+  const _moduleCache = {};
+  function loadModule(name) {
+    if (!_moduleCache[name]) {
+      _moduleCache[name] = import(`${CDN}/firebase-${name}.js`);
+    }
+    return _moduleCache[name];
+  }
+
+  // ─── App singleton ────────────────────────────────────────────
+  let _app = null;
+  async function getApp() {
+    if (_app) return _app;
+    const { initializeApp, getApps } = await loadModule('app');
+    _app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    return _app;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // AUTH
+  // ═══════════════════════════════════════════════════════════════
+  let _auth = null;
+
+  /**
+   * Returns the Firebase Auth instance (initialised once).
+   */
+  async function getFirebaseAuth() {
+    if (_auth) return _auth;
+    const app = await getApp();
+    const { getAuth } = await loadModule('auth');
+    _auth = getAuth(app);
+    return _auth;
+  }
+
+  /**
+   * AvenoraFirebase.Auth — mirrors LegendAPI.auth surface so existing
+   * call-sites in app.js (handleLogin / handleRegister / handleLogout)
+   * continue to work unchanged.
+   *
+   * After sign-in we still call LegendState.set('user', …) and persist
+   * the Firebase UID + display name so the rest of the app can read it.
+   */
+  const FirebaseAuth = {
+    async register(username, email, password) {
+      const auth = await getFirebaseAuth();
+      const { createUserWithEmailAndPassword, updateProfile } = await loadModule('auth');
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      // Store username in Firebase display name
+      await updateProfile(cred.user, { displayName: username });
+
+      const user = _mapFbUser(cred.user, username);
+      LegendState.set('user', user);
+      // Persist uid so TokenStore shim stays truthy
+      _persistUid(cred.user.uid);
+      return { user };
+    },
+
+    async login(email, password) {
+      const auth = await getFirebaseAuth();
+      const { signInWithEmailAndPassword } = await loadModule('auth');
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const user = _mapFbUser(cred.user);
+      LegendState.set('user', user);
+      _persistUid(cred.user.uid);
+      return { user };
+    },
+
+    async logout() {
+      const auth = await getFirebaseAuth();
+      const { signOut } = await loadModule('auth');
+      await signOut(auth);
+      _clearUid();
+      LegendState.set('user', null);
+      window.dispatchEvent(new Event('lu:logged-out'));
+    },
+
+    async me() {
+      const auth = await getFirebaseAuth();
+      if (!auth.currentUser) return null;
+      const user = _mapFbUser(auth.currentUser);
+      LegendState.set('user', user);
+      return user;
+    },
+
+    async forgotPassword(email) {
+      const auth = await getFirebaseAuth();
+      const { sendPasswordResetEmail } = await loadModule('auth');
+      await sendPasswordResetEmail(auth, email);
+      return { message: 'Password reset email sent. Check your inbox.' };
+    },
+
+    isLoggedIn() {
+      return !!(sessionStorage.getItem('lu_uid') || localStorage.getItem('lu_uid'));
+    },
+
+    getUser() {
+      return LegendState.get('user');
+    },
+
+    /**
+     * Attach a persistent onAuthStateChanged listener.
+     * Called once from app.js bootstrap to keep LegendState in sync.
+     *
+     * Returns a Promise that resolves after the FIRST auth callback fires
+     * (i.e. after Firebase has determined whether a session exists).
+     * app.js awaits this promise so the hub page is never rendered before
+     * the auth state is known, eliminating the startup race condition.
+     */
+    listenAuthState(callback) {
+      return new Promise(async (resolve) => {
+        const auth = await getFirebaseAuth();
+        const { onAuthStateChanged } = await loadModule('auth');
+        let firstFired = false;
+        onAuthStateChanged(auth, (fbUser) => {
+          if (fbUser) {
+            _persistUid(fbUser.uid);
+            const user = _mapFbUser(fbUser);
+            LegendState.set('user', user);
+            callback(user);
+          } else {
+            _clearUid();
+            LegendState.set('user', null);
+            callback(null);
+          }
+          // Mark auth check complete and resolve the startup gate
+          if (!firstFired) {
+            firstFired = true;
+            LegendState.set('authLoading', false);
+            resolve();
+          }
+        });
+      });
+    },
+
+    /** Returns a fresh Firebase ID token (for backend-verified requests). */
+    async getIdToken() {
+      const auth = await getFirebaseAuth();
+      if (!auth.currentUser) return null;
+      return auth.currentUser.getIdToken();
+    },
+  };
+
+  // ─── helpers ──────────────────────────────────────────────────
+  function _mapFbUser(fbUser, fallbackUsername) {
+    const username = fbUser.displayName || fallbackUsername || fbUser.email?.split('@')[0] || 'user';
+    return {
+      id:       fbUser.uid,
+      uid:      fbUser.uid,
+      email:    fbUser.email,
+      username,
+      role:     'member',                // role is managed in Firestore (see below)
+      profile:  {
+        displayName: username,
+        avatarUrl:   fbUser.photoURL || null,
+      },
+      emailVerified: fbUser.emailVerified,
+    };
+  }
+  function _persistUid(uid) {
+    sessionStorage.setItem('lu_uid', uid);
+    localStorage.setItem('lu_uid', uid);
+  }
+  function _clearUid() {
+    sessionStorage.removeItem('lu_uid');
+    localStorage.removeItem('lu_uid');
+    // Legacy JWT keys also cleared for cleanliness
+    sessionStorage.removeItem('lu_access');
+    localStorage.removeItem('lu_access');
+    localStorage.removeItem('lu_refresh');
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // FIRESTORE
+  // ═══════════════════════════════════════════════════════════════
+  let _db = null;
+
+  async function getFirestore() {
+    if (_db) return _db;
+    const app = await getApp();
+    const { getFirestore: _getFs } = await loadModule('firestore');
+    _db = _getFs(app);
+    return _db;
+  }
+
+  /**
+   * AvenoraFirebase.Firestore — lightweight wrappers for the collections
+   * used by the app (posts, profiles, gallery items).
+   */
+  const FirestoreService = {
+    async getPosts(limitCount = 20) {
+      const db = await getFirestore();
+      const { collection, query, orderBy, limit, getDocs } = await loadModule('firestore');
+      const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(limitCount));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    async createPost(content, mediaUrls = [], tags = []) {
+      const db = await getFirestore();
+      const { collection, addDoc, serverTimestamp } = await loadModule('firestore');
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const ref = await addDoc(collection(db, 'posts'), {
+        content,
+        mediaUrls,
+        tags,
+        author: { id: user.id, username: user.username, avatarUrl: user.profile?.avatarUrl || null },
+        likes: [],
+        commentCount: 0,
+        createdAt: serverTimestamp(),
+      });
+      return { id: ref.id };
+    },
+
+    async likePost(postId) {
+      const db = await getFirestore();
+      const { doc, updateDoc, arrayUnion, arrayRemove, getDoc } = await loadModule('firestore');
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const ref = doc(db, 'posts', postId);
+      const snap = await getDoc(ref);
+      const likes = snap.data()?.likes || [];
+      if (likes.includes(user.id)) {
+        await updateDoc(ref, { likes: arrayRemove(user.id) });
+      } else {
+        await updateDoc(ref, { likes: arrayUnion(user.id) });
+      }
+    },
+
+    async deletePost(postId) {
+      const db = await getFirestore();
+      const { doc, deleteDoc } = await loadModule('firestore');
+      await deleteDoc(doc(db, 'posts', postId));
+    },
+
+    async getProfile(uid) {
+      const db = await getFirestore();
+      const { doc, getDoc } = await loadModule('firestore');
+      const snap = await getDoc(doc(db, 'users', uid));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    },
+
+    async getProfileByUsername(username) {
+      const db = await getFirestore();
+      const { collection, query, where, limit, getDocs } = await loadModule('firestore');
+      const q = query(collection(db, 'users'), where('username', '==', username), limit(1));
+      const snap = await getDocs(q);
+      if (snap.empty) return null;
+      const d = snap.docs[0];
+      return { id: d.id, ...d.data() };
+    },
+
+    async upsertProfile(uid, data) {
+      const db = await getFirestore();
+      const { doc, setDoc, serverTimestamp } = await loadModule('firestore');
+      await setDoc(doc(db, 'users', uid), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+    },
+
+    async getGallery(limitCount = 20) {
+      const db = await getFirestore();
+      const { collection, query, orderBy, limit, getDocs } = await loadModule('firestore');
+      const q = query(collection(db, 'gallery'), orderBy('createdAt', 'desc'), limit(limitCount));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    async addGalleryItem(url, mediaType, caption = '') {
+      const db = await getFirestore();
+      const { collection, addDoc, serverTimestamp } = await loadModule('firestore');
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const ref = await addDoc(collection(db, 'gallery'), {
+        url, mediaType, caption,
+        author: { id: user.id, username: user.username },
+        likes: [],
+        createdAt: serverTimestamp(),
+      });
+      return { id: ref.id };
+    },
+
+    async deleteGalleryItem(id) {
+      const db = await getFirestore();
+      const { doc, deleteDoc } = await loadModule('firestore');
+      await deleteDoc(doc(db, 'gallery', id));
+    },
+
+    async likeGalleryItem(id) {
+      const db = await getFirestore();
+      const { doc, updateDoc, arrayUnion, arrayRemove, getDoc } = await loadModule('firestore');
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const ref = doc(db, 'gallery', id);
+      const snap = await getDoc(ref);
+      const likes = snap.data()?.likes || [];
+      if (likes.includes(user.id)) {
+        await updateDoc(ref, { likes: arrayRemove(user.id) });
+        return { liked: false, likeCount: likes.length - 1 };
+      } else {
+        await updateDoc(ref, { likes: arrayUnion(user.id) });
+        return { liked: true, likeCount: likes.length + 1 };
+      }
+    },
+
+    async updatePost(postId, content) {
+      const db = await getFirestore();
+      const { doc, updateDoc, serverTimestamp } = await loadModule('firestore');
+      await updateDoc(doc(db, 'posts', postId), { content, updatedAt: serverTimestamp() });
+    },
+
+    async addComment(postId, content) {
+      const db = await getFirestore();
+      const { collection, addDoc, doc, updateDoc, increment, serverTimestamp } = await loadModule('firestore');
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const ref = await addDoc(collection(db, 'posts', postId, 'comments'), {
+        content,
+        author: { id: user.id, username: user.username, avatarUrl: user.profile?.avatarUrl || null },
+        createdAt: serverTimestamp(),
+      });
+      await updateDoc(doc(db, 'posts', postId), { commentCount: increment(1) });
+      return { id: ref.id };
+    },
+
+    async getComments(postId) {
+      const db = await getFirestore();
+      const { collection, query, orderBy, getDocs } = await loadModule('firestore');
+      const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    async deleteComment(postId, commentId) {
+      const db = await getFirestore();
+      const { doc, deleteDoc, updateDoc, increment } = await loadModule('firestore');
+      await deleteDoc(doc(db, 'posts', postId, 'comments', commentId));
+      await updateDoc(doc(db, 'posts', postId), { commentCount: increment(-1) });
+    },
+
+    // ─── Stories ────────────────────────────────────────────
+    async getStories(limitCount = 50) {
+      const db = await getFirestore();
+      const { collection, query, orderBy, limit, getDocs, where, Timestamp } = await loadModule('firestore');
+      // Only show stories created in the last 24 hours
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const q = query(
+        collection(db, 'stories'),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount),
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    async getStoriesByUser(userId) {
+      const db = await getFirestore();
+      const { collection, query, where, orderBy, getDocs } = await loadModule('firestore');
+      const q = query(collection(db, 'stories'), where('author.id', '==', userId), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+
+    async createStory(mediaUrl, mediaType, caption) {
+      const db = await getFirestore();
+      const { collection, addDoc, serverTimestamp } = await loadModule('firestore');
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const ref = await addDoc(collection(db, 'stories'), {
+        mediaUrl, mediaType, caption,
+        author: { id: user.id, username: user.username, avatarUrl: user.profile?.avatarUrl || null },
+        views: [],
+        createdAt: serverTimestamp(),
+      });
+      return { id: ref.id };
+    },
+
+    async deleteStory(storyId) {
+      const db = await getFirestore();
+      const { doc, deleteDoc } = await loadModule('firestore');
+      await deleteDoc(doc(db, 'stories', storyId));
+    },
+
+    // ─── User Preferences (stored in users/{uid}/preferences sub-doc) ──
+    async getUserPreferences(uid) {
+      const db = await getFirestore();
+      const { doc, getDoc } = await loadModule('firestore');
+      const snap = await getDoc(doc(db, 'userPreferences', uid));
+      return snap.exists() ? snap.data() : null;
+    },
+
+    async setUserPreferences(uid, prefs) {
+      const db = await getFirestore();
+      const { doc, setDoc, serverTimestamp } = await loadModule('firestore');
+      await setDoc(
+        doc(db, 'userPreferences', uid),
+        { ...prefs, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+    },
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // REALTIME DATABASE  (Chat)
+  // ═══════════════════════════════════════════════════════════════
+  let _rtdb = null;
+
+  async function getRTDB() {
+    if (_rtdb) return _rtdb;
+    const app = await getApp();
+    const { getDatabase } = await loadModule('database');
+    _rtdb = getDatabase(app);
+    return _rtdb;
+  }
+
+  /**
+   * AvenoraFirebase.RTDB — used by chat.js as a drop-in.
+   * Mirrors the shape chat.js expects from Socket.io events.
+   */
+  const RTDBService = {
+    /**
+     * Subscribe to messages in a room.
+     * Returns an unsubscribe function (call it on room leave / page cleanup).
+     */
+    async onMessages(roomId, callback) {
+      const db = await getRTDB();
+      const { ref, query: dbQuery, orderByChild, limitToLast, onValue } = await loadModule('database');
+      const msgsRef = dbQuery(
+        ref(db, `chat/${roomId}/messages`),
+        orderByChild('timestamp'),
+        limitToLast(100),
+      );
+      const unsub = onValue(msgsRef, (snap) => {
+        const msgs = [];
+        snap.forEach(child => msgs.push({ id: child.key, ...child.val() }));
+        callback(msgs);
+      });
+      return () => unsub();
+    },
+
+    /**
+     * Send a message to a room.
+     */
+    async sendMessage(roomId, content) {
+      const db = await getRTDB();
+      const { ref, push, serverTimestamp } = await loadModule('database');
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      await push(ref(db, `chat/${roomId}/messages`), {
+        content,
+        author: { id: user.id, username: user.username, avatarUrl: user.profile?.avatarUrl || null },
+        timestamp: serverTimestamp(),
+        roomId,
+      });
+    },
+
+    /**
+     * Write / clear a typing indicator for the current user.
+     */
+    async setTyping(roomId, isTyping) {
+      const db = await getRTDB();
+      const { ref, set, remove } = await loadModule('database');
+      const user = LegendState.get('user');
+      if (!user) return;
+      const typingRef = ref(db, `chat/${roomId}/typing/${user.id}`);
+      if (isTyping) {
+        await set(typingRef, { username: user.username, at: Date.now() });
+      } else {
+        await remove(typingRef);
+      }
+    },
+
+    /**
+     * Subscribe to typing indicators for a room.
+     */
+    async onTyping(roomId, callback) {
+      const db = await getRTDB();
+      const { ref, onValue } = await loadModule('database');
+      const typingRef = ref(db, `chat/${roomId}/typing`);
+      const unsub = onValue(typingRef, (snap) => {
+        const typists = {};
+        snap.forEach(child => { typists[child.key] = child.val(); });
+        callback(typists);
+      });
+      return () => unsub();
+    },
+
+    /**
+     * Delete a message (moderation).
+     */
+    async deleteMessage(roomId, messageId) {
+      const db = await getRTDB();
+      const { ref, remove } = await loadModule('database');
+      await remove(ref(db, `chat/${roomId}/messages/${messageId}`));
+    },
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // STORAGE
+  // ═══════════════════════════════════════════════════════════════
+  let _storage = null;
+
+  async function getStorageInstance() {
+    if (_storage) return _storage;
+    const app = await getApp();
+    const { getStorage } = await loadModule('storage');
+    _storage = getStorage(app);
+    return _storage;
+  }
+
+  /**
+   * AvenoraFirebase.Storage — replaces the multipart-upload endpoints
+   * in UploadAPI. Returns the public download URL.
+   */
+  const StorageService = {
+    async upload(path, file, onProgress) {
+      const storage = await getStorageInstance();
+      const { ref, uploadBytesResumable, getDownloadURL } = await loadModule('storage');
+      const storageRef = ref(storage, path);
+      return new Promise((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file);
+        task.on('state_changed',
+          (snap) => {
+            if (onProgress) onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+          },
+          reject,
+          async () => {
+            const url = await getDownloadURL(task.snapshot.ref);
+            resolve(url);
+          }
+        );
+      });
+    },
+
+    async uploadAvatar(file, onProgress) {
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const ext = file.name.split('.').pop();
+      return StorageService.upload(`avatars/${user.id}.${ext}`, file, onProgress);
+    },
+
+    async uploadImage(file, onProgress) {
+      const name = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      return StorageService.upload(`images/${name}`, file, onProgress);
+    },
+
+    async uploadAudio(file, onProgress) {
+      const name = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      return StorageService.upload(`audio/${name}`, file, onProgress);
+    },
+
+    async uploadVideo(file, onProgress) {
+      const name = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      return StorageService.upload(`videos/${name}`, file, onProgress);
+    },
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // ANALYTICS
+  // ═══════════════════════════════════════════════════════════════
+  let _analytics = null;
+
+  async function getAnalyticsInstance() {
+    if (_analytics) return _analytics;
+    const app = await getApp();
+    const { getAnalytics } = await loadModule('analytics');
+    _analytics = getAnalytics(app);
+    return _analytics;
+  }
+
+  const AnalyticsService = {
+    async logPageView(pageName) {
+      try {
+        const analytics = await getAnalyticsInstance();
+        const { logEvent } = await loadModule('analytics');
+        logEvent(analytics, 'page_view', { page_title: pageName, page_location: window.location.href });
+      } catch { /* analytics is non-critical */ }
+    },
+
+    async logEvent(eventName, params = {}) {
+      try {
+        const analytics = await getAnalyticsInstance();
+        const { logEvent } = await loadModule('analytics');
+        logEvent(analytics, eventName, params);
+      } catch { /* analytics is non-critical */ }
+    },
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLOUD MESSAGING (FCM)
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * VAPID public key for Web Push notifications.
+   */
+  const VAPID_KEY = 'BON0v9rTj7Zd9CCFbldD-dEtVSx0oa7ZgC-wJNdwpEjpEI9ikzL7PvQmKU5Ie2ZHeRKI9inq7hIuiKMZgHRqTeE';
+
+  const MessagingService = {
+    async requestPermission() {
+      if (!('Notification' in window)) return 'unsupported';
+      const permission = await Notification.requestPermission();
+      return permission; // 'granted' | 'denied' | 'default'
+    },
+
+    async getToken() {
+      try {
+        const app = await getApp();
+        const { getMessaging, getToken } = await loadModule('messaging');
+        const messaging = getMessaging(app);
+        const sw = await navigator.serviceWorker.ready;
+        const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: sw });
+        return token;
+      } catch (err) {
+        console.warn('[FCM] Could not get token:', err.message);
+        return null;
+      }
+    },
+
+    async setup() {
+      if (!('serviceWorker' in navigator)) return;
+      const permission = await MessagingService.requestPermission();
+      if (permission !== 'granted') return;
+      const token = await MessagingService.getToken();
+      if (token) {
+        // Persist token — send to your backend if you want server-initiated pushes
+        localStorage.setItem('lu_fcm_token', token);
+        console.log('[FCM] Token registered');
+      }
+    },
+
+    async onForegroundMessage(callback) {
+      try {
+        const app = await getApp();
+        const { getMessaging, onMessage } = await loadModule('messaging');
+        const messaging = getMessaging(app);
+        return onMessage(messaging, callback);
+      } catch { return () => {}; }
+    },
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // Public namespace
+  // ═══════════════════════════════════════════════════════════════
+  global.AvenoraFirebase = {
+    getApp,
+    Auth:      FirebaseAuth,
+    Firestore: FirestoreService,
+    RTDB:      RTDBService,
+    Storage:   StorageService,
+    Analytics: AnalyticsService,
+    Messaging: MessagingService,
+  };
+
+})(window);

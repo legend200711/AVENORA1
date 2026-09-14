@@ -1,0 +1,179 @@
+/**
+ * AVENORA - Main Backend Server
+ * Entry point for the API + WebSocket server
+ */
+
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const path = require('path');
+
+const { connectDatabase } = require('./config/database');
+const { initializeSocketServer } = require('./services/chat/socketService');
+const logger = require('./utils/logger');
+
+// Route imports
+const authRoutes = require('./api/routes/auth');
+const userRoutes = require('./api/routes/users');
+const postRoutes = require('./api/routes/posts');
+const videoRoutes = require('./api/routes/videos');
+const streamRoutes = require('./api/routes/streams');
+const musicRoutes = require('./api/routes/music');
+const galleryRoutes = require('./api/routes/gallery');
+const chatRoutes = require('./api/routes/chat');
+const roomRoutes = require('./api/routes/rooms');
+const dmRoutes   = require('./api/routes/dm');
+const inboxRoutes = require('./api/routes/inbox');
+const notificationRoutes = require('./api/routes/notifications');
+const searchRoutes = require('./api/routes/search');
+const adminRoutes = require('./api/routes/admin');
+const adminThemeRoutes = require('./api/routes/adminThemes');
+const uploadRoutes = require('./api/routes/upload');
+const socialRoutes = require('./api/routes/social');
+const reportsRoutes = require('./api/routes/reports');
+const storiesRoutes = require('./api/routes/stories');
+const companionRoutes = require('./api/routes/companion');
+const preferencesRoutes = require('./api/routes/preferences');
+
+// DISABLED: Avenora Cloud Stream (cloudstream-worker.js + 24-hour-cloud-stream/)
+// is the active implementation. The Node.js ffmpeg/RTMP backend service is no longer
+// started from here.  The route file is preserved but not mounted.
+// const cloudStreamRoutes = require('./api/routes/cloudStream');
+
+// DISABLED: Avenora Live (live.html / live-hub.html / live-room.html)
+// is the active implementation using Firebase RTDB WebRTC signaling.
+// The WHIP/MediaMTX route is preserved but not mounted.
+// const liveRoutes = require('./api/routes/live');
+
+// Middleware
+const { globalRateLimiter } = require('./api/middleware/rateLimiter');
+const { errorHandler } = require('./api/middleware/errorHandler');
+
+const app = express();
+const server = http.createServer(app);
+
+// ─── Security ───────────────────────────────────────────────
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false, // Configure per environment
+}));
+
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// ─── Request Parsing ────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ─── Logging ────────────────────────────────────────────────
+if (process.env.NODE_ENV !== 'test') {
+  app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
+}
+
+// ─── Rate Limiting ──────────────────────────────────────────
+app.use('/api/', globalRateLimiter);
+
+// ─── Static Uploads (dev only — use CDN in production) ──────
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  maxAge: '1d',
+  etag: true,
+  setHeaders: (res, filePath) => {
+    // Allow cross-origin audio/video for media players
+    if (/\.(mp3|wav|ogg|flac|aac|mp4|webm|m4a)$/i.test(filePath)) {
+      res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
+      res.setHeader('Accept-Ranges', 'bytes');
+    }
+  },
+}));
+
+// ─── API Routes ─────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/videos', videoRoutes);
+app.use('/api/streams', streamRoutes);
+app.use('/api/music', musicRoutes);
+app.use('/api/gallery', galleryRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/rooms', roomRoutes);
+app.use('/api/dm', dmRoutes);
+app.use('/api/inbox', inboxRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin/themes', adminThemeRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/social', socialRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/stories', storiesRoutes);
+app.use('/api/companion', companionRoutes);
+app.use('/api/preferences', preferencesRoutes);
+
+// DISABLED — see comments above.
+// app.use('/api/admin/cloud-stream', cloudStreamRoutes);
+// app.use('/api/live', liveRoutes);
+
+// ─── Public: Published Theme Tokens (no auth required) ───────
+// Returns only the CSS token values of the current live theme.
+// Contains no PII, credentials, or internal data.
+app.get('/api/themes/active', async (req, res) => {
+  try {
+    const FounderTheme = require('./models/FounderTheme');
+    const theme = await FounderTheme.findOne({ status: 'published' })
+      .sort({ publishedAt: -1 })
+      .select('name tokens publishedAt')
+      .lean();
+    res.json({ success: true, theme: theme ? { name: theme.name, tokens: theme.tokens, publishedAt: theme.publishedAt } : null });
+  } catch {
+    res.json({ success: true, theme: null });
+  }
+});
+
+// ─── Health Check ────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'Avenora API',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ─── 404 Handler ─────────────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found', path: req.path });
+});
+
+// ─── Error Handler ───────────────────────────────────────────
+app.use(errorHandler);
+
+// ─── Startup ─────────────────────────────────────────────────
+const PORT = process.env.PORT || 3001;
+
+async function start() {
+  try {
+    await connectDatabase();
+    
+    // Initialize Socket.io for real-time features
+    initializeSocketServer(server);
+
+    server.listen(PORT, () => {
+      logger.info(`🌅 AVENORA API running on port ${PORT}`);
+      logger.info(`Environment: ${process.env.NODE_ENV}`);
+    });
+  } catch (err) {
+    logger.error('Failed to start server:', err);
+    process.exit(1);
+  }
+}
+
+start();
+
+module.exports = { app, server }; // For testing

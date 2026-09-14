@@ -1,0 +1,185 @@
+# ============================================================
+# AVENORA Live — MediaMTX Server Configuration
+# ============================================================
+#
+# MediaMTX is a self-hosted, open-source media server.
+# Source: https://github.com/bluenviron/mediamtx
+#
+# DEPLOYMENT REQUIREMENTS:
+#   - MediaMTX v1.6+ (WHIP support added in v1.0)
+#   - HTTPS/WSS in production (WHIP requires a secure context in browsers)
+#   - Firewall: open ports 8889 (WHIP/WebRTC), 8888 (HLS), 9997 (API)
+#   - STUN/TURN server recommended for non-LAN deployments
+#
+# INSTALLATION:
+#   # Option A — Binary (Linux x64)
+#   curl -Lo mediamtx.tar.gz https://github.com/bluenviron/mediamtx/releases/latest/download/mediamtx_v1.x.x_linux_amd64.tar.gz
+#   tar -xf mediamtx.tar.gz
+#   ./mediamtx mediamtx.yml
+#
+#   # Option B — Docker
+#   docker run -d \
+#     --name mediamtx \
+#     -e MTX_PROTOCOLS=tcp \
+#     -p 8888:8888 \
+#     -p 8889:8889 \
+#     -p 9997:9997 \
+#     -v $(pwd)/mediamtx.yml:/mediamtx.yml \
+#     bluenviron/mediamtx:latest
+#
+# BACKEND .env VARIABLES (set these after MediaMTX is running):
+#   MEDIAMTX_BASE_URL=https://media.example.com
+#   MEDIAMTX_WHIP_URL=https://media.example.com/whip
+#   MEDIAMTX_HLS_URL=https://media.example.com/hls
+#   MEDIAMTX_API_URL=http://localhost:9997   # private — never expose to frontend
+#   LIVE_PUBLIC_BASE_URL=https://app.legenduniverse.com
+#   LIVE_SESSION_TIMEOUT_SECONDS=3600
+#
+# HOW IT WORKS:
+#   1. Browser captures camera/mic via getUserMedia
+#   2. Browser creates RTCPeerConnection and sends SDP offer via WHIP POST
+#      to: https://media.example.com/whip/live-<streamId>/whip
+#   3. MediaMTX accepts the WebRTC publisher and ingests the stream
+#   4. MediaMTX transcodes to HLS segments
+#   5. Viewers load: https://media.example.com/hls/live-<streamId>/index.m3u8
+# ============================================================
+
+# ─── API ─────────────────────────────────────────────────
+# The management API is used by the AVENORA backend to check
+# publisher status and force-end streams.
+# Bind to localhost — do NOT expose to the public internet.
+api: yes
+apiAddress: :9997
+
+# ─── Logging ─────────────────────────────────────────────
+logLevel: info
+logDestinations: [stdout]
+# logFile: /var/log/mediamtx.log
+
+# ─── Stream paths ────────────────────────────────────────
+# AVENORA uses dynamic paths: "live-<mongoId>"
+# e.g. live-6697a2b3c1d8e9f000000001
+#
+# The pathDefaults block applies to all paths.
+pathDefaults:
+  # Automatically remove the path when the publisher disconnects
+  # (prevents stale HLS playlists from being visible)
+  recordDeleteAfter: 0s
+
+  # Require no auth for publishing or reading by default.
+  # In production, consider adding publishUser/publishPass
+  # and proxying WHIP through the AVENORA backend (which validates JWT).
+  # For now, path-level auth is intentionally open; JWT validation is
+  # done by the AVENORA API before the WHIP URL is issued.
+  #
+  # publishUser:
+  # publishPass:
+  # readUser:
+  # readPass:
+
+  # Allow all source types: WebRTC (WHIP), RTSP, etc.
+  # AVENORA only uses WebRTC (WHIP) publishing.
+
+# ─── WebRTC / WHIP ────────────────────────────────────────
+webrtc: yes
+webrtcAddress: :8889
+
+# HTTPS is REQUIRED for WHIP in production browsers.
+# In development (localhost) plain HTTP/WS is allowed.
+# Set the TLS cert/key here or terminate TLS at a reverse proxy (recommended).
+#
+# webrtcEncryption: yes
+# webrtcServerKey: /etc/ssl/private/media.key
+# webrtcServerCert: /etc/ssl/certs/media.crt
+
+# STUN servers used for ICE candidate gathering.
+# The AVENORA frontend also sends stun:stun.l.google.com:19302.
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+
+# ICE host candidates — needed when MediaMTX is behind NAT.
+# Set to your server's public IP if STUN is not sufficient.
+# webrtcAdditionalHosts:
+#   - 203.0.113.42
+
+# ─── HLS ─────────────────────────────────────────────────
+hls: yes
+hlsAddress: :8888
+hlsEncryption: no            # Set yes if serving directly (no reverse proxy)
+hlsVariant: lowLatency       # Low-latency HLS (LL-HLS) for ~2-4 s latency
+hlsSegmentCount: 7           # Keep 7 segments (covers ~14 s at 2 s segments)
+hlsSegmentDuration: 2s
+hlsPartDuration: 200ms       # LL-HLS part duration
+
+# CORS — allow the AVENORA frontend origin to load HLS
+# Alternatively, handle CORS at your reverse proxy (nginx/caddy).
+# hlsCORSOrigin: https://app.legenduniverse.com
+
+# ─── RTMP ─────────────────────────────────────────────────
+# RTMP is NOT used by AVENORA Live (no OBS/encoder support).
+# Disable it to reduce attack surface.
+rtmp: no
+
+# ─── SRT ─────────────────────────────────────────────────
+# SRT is NOT used by AVENORA Live.
+srt: no
+
+# ─── RTSP ────────────────────────────────────────────────
+# RTSP is NOT used by AVENORA Live.
+rtsp: no
+
+# ─── Recording (optional) ────────────────────────────────
+# To save live streams as recordings, uncomment and configure:
+#
+# paths:
+#   live-~:           # matches any path starting with "live-"
+#     record: yes
+#     recordPath: /data/recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+#     recordFormat: mp4
+#     recordDeleteAfter: 0s
+
+# ─── Health check ────────────────────────────────────────
+# The AVENORA backend checks:
+#   GET http://localhost:9997/v3/config/global/get
+#   GET http://localhost:9997/v3/paths/get/live-<streamId>
+# Both are standard MediaMTX v3 API endpoints.
+# No additional configuration required.
+
+# ─── Reverse proxy (recommended) ─────────────────────────
+# For production, run MediaMTX behind nginx or Caddy.
+# Example nginx snippet:
+#
+#   server {
+#     listen 443 ssl;
+#     server_name media.example.com;
+#
+#     ssl_certificate     /etc/ssl/certs/media.crt;
+#     ssl_certificate_key /etc/ssl/private/media.key;
+#
+#     # WHIP (WebRTC)
+#     location /whip/ {
+#       proxy_pass http://localhost:8889/;
+#       proxy_set_header Host $host;
+#       proxy_set_header Upgrade $http_upgrade;
+#       proxy_set_header Connection "upgrade";
+#       add_header 'Access-Control-Allow-Origin' 'https://app.legenduniverse.com' always;
+#       add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, DELETE' always;
+#       add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+#       if ($request_method = OPTIONS) { return 204; }
+#     }
+#
+#     # HLS delivery
+#     location /hls/ {
+#       proxy_pass http://localhost:8888/;
+#       proxy_set_header Host $host;
+#       add_header 'Access-Control-Allow-Origin' 'https://app.legenduniverse.com' always;
+#       add_header 'Cache-Control' 'no-cache';
+#     }
+#   }
+
+# ─── Session cleanup ─────────────────────────────────────
+# MediaMTX removes a path automatically when the publisher disconnects.
+# The AVENORA backend also calls:
+#   POST http://localhost:9997/v3/kick/publisher/live-<streamId>
+# when a user clicks "End Stream" or the session times out.
+# No additional cleanup configuration is required.

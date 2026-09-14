@@ -1,0 +1,1381 @@
+/**
+ * AVENORA — Comprehensive Responsive Stylesheet
+ * Mobile-first. Covers every screen from 320px to desktop-wide.
+ * Breakpoints:
+ *   xs  — up to 374px   (small phones: iPhone SE, Galaxy A series)
+ *   sm  — 375px–413px   (standard phones: iPhone 14, Pixel 7)
+ *   md  — 414px–767px   (large phones: iPhone Plus/Max, Galaxy Ultra)
+ *   lg  — 768px–1023px  (portrait tablets: iPad, Galaxy Tab)
+ *   xl  — 1024px–1279px (landscape tablets / small laptops)
+ *   2xl — 1280px+       (laptops, desktops)
+ *
+ * Rules are ordered mobile-first (base + min-width overrides).
+ * All interactive targets ≥ 44×44 px per WCAG 2.5.5.
+ * Safe-area-inset applied globally where fixed UI touches edges.
+ * No hover-only controls — :hover always paired with :focus-visible.
+ * No strobe effects. prefers-reduced-motion honoured everywhere.
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL SAFE AREA + OVERFLOW PREVENTION
+   ═══════════════════════════════════════════════════════════ */
+
+html {
+  /* Prevent font size inflation on orientation change */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  /* Hard-stop horizontal scroll on every breakpoint */
+  overflow-x: hidden;
+  /* Support iOS safe areas */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Every fixed element that hugs a screen edge must respect safe areas */
+.nav-global {
+  padding-left:  calc(var(--space-lg) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--space-lg) + env(safe-area-inset-right, 0px));
+}
+
+.mobile-nav {
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  padding-left:   env(safe-area-inset-left, 0px);
+  padding-right:  env(safe-area-inset-right, 0px);
+}
+
+.toast-container {
+  right: calc(var(--space-md) + env(safe-area-inset-right, 0px));
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOUCH-TARGET FLOOR (44 × 44 px minimum)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Buttons and interactive anchors should never be too small to tap */
+.btn,
+.nav-link,
+.tab-btn,
+.dropdown-item,
+.mobile-nav-item {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Bottom nav items need full-height tap area */
+.mobile-nav-item {
+  min-width: 44px;
+  justify-content: center;
+  padding: 6px 10px;
+}
+
+/* Small icon buttons used throughout the nav */
+.btn-sm {
+  min-height: 36px; /* slightly below for compact secondary actions */
+}
+
+/* Chat send button, header action buttons */
+.chat-send-btn,
+.chat-header-btn,
+.sn-tool-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Form inputs — comfortable text entry on mobile */
+.form-input,
+.chat-input,
+.sn-compose-input,
+.sn-comment-input,
+.midnight-comment-input,
+.avn-cmp__talk-input {
+  min-height: 44px;
+  font-size: 16px; /* Prevents iOS zoom-on-focus */
+}
+
+/* Select and search inputs */
+input[type="search"],
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+  font-size: 16px !important; /* Hard-block iOS zoom */
+}
+
+/* ═══════════════════════════════════════════════════════════
+   IMAGES, VIDEO, MEDIA — FLUID BY DEFAULT
+   ═══════════════════════════════════════════════════════════ */
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Preserve aspect ratio on video embeds */
+.video-thumb,
+.video-thumb-wrap,
+.midnight-player-wrap video {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL — MOBILE SHEET BEHAVIOUR
+   ═══════════════════════════════════════════════════════════ */
+
+.modal-backdrop {
+  align-items: flex-end; /* slide up from bottom on small screens */
+  padding: 0;
+}
+
+.modal {
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  max-height: 95dvh;        /* dynamic viewport height for browser chrome */
+  max-height: 95vh;
+  width: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* On larger screens, center the modal */
+@media (min-width: 600px) {
+  .modal-backdrop {
+    align-items: center;
+    padding: var(--space-md);
+  }
+  .modal {
+    border-radius: var(--radius-xl);
+    width: auto;
+    max-width: 480px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL NAVIGATION
+   ═══════════════════════════════════════════════════════════ */
+
+/* At ≤ 374px the brand text can still overflow — clamp it */
+.nav-brand {
+  font-size: clamp(0.9rem, 4vw, 1.2rem);
+  overflow: hidden;
+  max-width: 120px;
+}
+
+/* Notification dropdown must not overflow on narrow screens */
+#notif-menu {
+  right: 0;
+  left: auto;
+  max-width: calc(100vw - 32px);
+  width: 300px;
+}
+
+/* User dropdown */
+#user-menu {
+  right: 0;
+  left: auto;
+  max-width: calc(100vw - 32px);
+}
+
+/* ── Mobile (≤ 768px) tweaks already in theme.css ──
+   These extend / patch the breakpoint further: */
+@media (max-width: 768px) {
+  .nav-global {
+    padding: 0 var(--space-md);
+    padding-left:  calc(var(--space-md) + env(safe-area-inset-left, 0px));
+    padding-right: calc(var(--space-md) + env(safe-area-inset-right, 0px));
+    gap: var(--space-sm);
+  }
+
+  /* Show mobile nav for ≤ 768px */
+  .mobile-nav {
+    display: block;
+  }
+
+  /* Ensure page content is not covered by bottom nav */
+  .has-mobile-nav .page-wrapper {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PAGE WRAPPER & CONTAINERS
+   ═══════════════════════════════════════════════════════════ */
+
+.page-wrapper {
+  /* Prevent any page from causing horizontal scroll */
+  overflow-x: hidden;
+  width: 100%;
+}
+
+.container,
+.container-sm,
+.container-lg {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 374px) {
+  .container,
+  .container-sm,
+  .container-lg {
+    padding-left:  var(--space-sm);
+    padding-right: var(--space-sm);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GRID SYSTEMS — MOBILE FIRST
+   ═══════════════════════════════════════════════════════════ */
+
+/* Single column on the smallest phones */
+@media (max-width: 374px) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Two columns on standard phones */
+@media (min-width: 375px) and (max-width: 767px) {
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .grid-2 {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .toast-container {
+    left:   var(--space-sm);
+    right:  var(--space-sm);
+    top:    auto;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .toast {
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HUB PAGE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .hub-root {
+    padding-bottom: var(--space-xl);
+  }
+
+  .hub-hero {
+    min-height: 220px;
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .hub-hero-eclipse {
+    width: 200px;
+    height: 200px;
+    top: -60px;
+    right: -60px;
+  }
+
+  .hub-title {
+    font-size: clamp(1.6rem, 8vw, 2.2rem);
+    letter-spacing: 0.06em;
+  }
+
+  .hub-subtitle {
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+  }
+
+  .hub-profile-header {
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+  }
+
+  .hub-profile-left {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hub-profile-actions {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .hub-quick-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-sm);
+  }
+
+  .hub-quick-item {
+    padding: var(--space-sm);
+    font-size: 0.65rem;
+  }
+
+  .hub-section {
+    padding-left:  var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  .hub-continue-list {
+    gap: var(--space-sm);
+  }
+
+  .hub-continue-item {
+    padding: var(--space-sm);
+  }
+
+  .hub-featured-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .hub-feature-card {
+    padding: var(--space-md);
+  }
+
+  .hub-explore-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 767px) {
+  .hub-explore-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .hub-quick-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SOCIAL / FEED PAGE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .sn-page {
+    padding: 0;
+  }
+
+  .sn-compose {
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .sn-compose-toolbar {
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  }
+
+  .sn-compose-actions {
+    justify-content: flex-end;
+    margin-top: var(--space-xs);
+  }
+
+  /* Post action bar — equal spacing, easy to tap */
+  .sn-action-bar {
+    gap: 2px;
+    justify-content: space-between;
+    padding: 0 var(--space-xs);
+  }
+
+  .sn-action-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 4px;
+    min-height: 44px;
+    font-size: 0.75rem;
+  }
+
+  /* Story bar — items sized for touch */
+  .sn-story-item,
+  .sn-story-add {
+    min-width: 60px;
+  }
+
+  /* Media — full-width single image */
+  .sn-media-1 .sn-media-img {
+    height: 56vw; /* proportional, never clips on narrow screens */
+  }
+
+  /* Profile header */
+  .sn-profile-stats {
+    justify-content: space-around;
+    gap: var(--space-sm);
+  }
+
+  .sn-stat-btn {
+    min-height: 44px;
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Post menu — positioned inside viewport */
+  .sn-post-menu {
+    right: 0;
+    left: auto;
+    max-width: calc(100vw - 32px);
+  }
+
+  /* Comment input row — stacked on 320px */
+  .sn-comment-input-row {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  .sn-comment-input-row .btn {
+    width: 100%;
+  }
+
+  /* Full-screen image overlay — handle notch */
+  .sn-fullscreen-overlay {
+    padding-top:    env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   VIDEO PAGE (MIDNIGHT)
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .midnight-page {
+    padding: 0;
+  }
+
+  .midnight-hero {
+    min-height: 160px;
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .midnight-brand h1 {
+    font-size: clamp(1.4rem, 7vw, 2rem);
+  }
+
+  .midnight-tabs {
+    padding: var(--space-xs) var(--space-sm);
+    gap: 2px;
+  }
+
+  .midnight-tab {
+    padding: 10px 10px;
+    font-size: 0.75rem;
+    min-height: 44px;
+  }
+
+  .midnight-grid {
+    grid-template-columns: 1fr;
+    padding: 0 var(--space-sm);
+    gap: var(--space-sm);
+  }
+
+  /* Video card — full-width on xs */
+  .video-card-midnight {
+    width: 100%;
+  }
+
+  /* Player — full-width, 16:9 */
+  .midnight-player-wrap {
+    border-radius: 0;
+    margin-left:  calc(-1 * var(--space-md));
+    margin-right: calc(-1 * var(--space-md));
+    width: calc(100% + var(--space-md) * 2);
+  }
+
+  /* Action bar — wrap on 320px */
+  .midnight-action-bar {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .midnight-action-btn {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+
+  /* Comment compose */
+  .midnight-comment-compose {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  .midnight-comment-compose .btn {
+    width: 100%;
+  }
+
+  /* Filter chips — scrollable row */
+  .midnight-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .midnight-filters::-webkit-scrollbar { display: none; }
+
+  .midnight-filter-chip {
+    white-space: nowrap;
+    min-height: 36px;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 767px) {
+  .midnight-grid {
+    grid-template-columns: repeat(2, 1fr);
+    padding: 0 var(--space-md);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MUSIC HUB
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .music-hero {
+    padding: var(--space-lg) var(--space-md);
+    min-height: 160px;
+  }
+
+  .music-hub-title {
+    font-size: clamp(1.4rem, 7vw, 2rem);
+  }
+
+  /* Player bar — stacked on small phones */
+  .music-player-bar {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .mp-main-row {
+    flex-direction: column;
+    gap: var(--space-sm);
+    align-items: stretch;
+  }
+
+  .mp-art {
+    width: 56px;
+    height: 56px;
+    align-self: flex-start;
+  }
+
+  .mp-info {
+    min-width: 0;
+  }
+
+  .mp-controls {
+    justify-content: center;
+    gap: var(--space-sm);
+  }
+
+  .mp-play-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .mp-icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .mp-progress-area {
+    width: 100%;
+    padding: 0;
+  }
+
+  .mp-volume-row {
+    display: none; /* Volume replaced by device hardware controls on mobile */
+  }
+
+  /* Mobile controls row */
+  .mp-mobile-controls {
+    display: flex;
+    justify-content: space-around;
+    padding: var(--space-xs) 0;
+  }
+
+  /* Music card grid */
+  .music-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm);
+    padding: 0 var(--space-sm);
+  }
+
+  .music-card-body {
+    padding: var(--space-sm);
+  }
+
+  .music-card-title {
+    font-size: 0.85rem;
+  }
+
+  /* Genre pills — scrollable row */
+  .genre-filter-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .genre-filter-row::-webkit-scrollbar { display: none; }
+
+  .genre-pill {
+    white-space: nowrap;
+    min-height: 36px;
+  }
+
+  /* Track list rows */
+  .mtrack-row {
+    padding: var(--space-sm) var(--space-sm);
+    gap: var(--space-sm);
+  }
+
+  .mtrack-actions {
+    opacity: 1; /* Always visible on touch devices */
+  }
+
+  /* Upload zone */
+  .music-upload-zone {
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  /* External service grid — 2 columns */
+  .external-service-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Queue panel — slides in from bottom */
+  .music-queue-panel {
+    width: 100%;
+    left: 0;
+    right: 0;
+    height: 65dvh;
+    height: 65vh;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 767px) {
+  .music-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHAT
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  /* Chat height must respect both nav bars */
+  .chat-root {
+    height: calc(100dvh - 60px - env(safe-area-inset-bottom, 70px));
+    height: calc(100vh  - 60px - 70px);
+  }
+
+  /* Messages area */
+  .chat-messages {
+    padding: var(--space-sm);
+  }
+
+  /* Message bubbles — give more space */
+  .chat-msg {
+    gap: var(--space-sm);
+  }
+
+  .chat-msg-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 0.85rem;
+  }
+
+  /* Input bar */
+  .chat-input-bar {
+    padding: var(--space-xs) var(--space-sm);
+    padding-bottom: calc(var(--space-xs) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-input {
+    padding: 10px 12px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .chat-send-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  /* Sidebar overlay — full width on xs */
+  .chat-sidebar.mobile-open {
+    width: min(280px, 85vw);
+  }
+
+  /* Message actions — always visible, not hover-only */
+  .chat-msg-actions {
+    opacity: 1;
+  }
+
+  /* Chat header */
+  .chat-header {
+    padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
+  }
+
+  .chat-header-actions {
+    gap: var(--space-xs);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ARCADE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  #arcade-game-list {
+    grid-template-columns: 1fr !important;
+    padding: 0 var(--space-sm);
+    gap: var(--space-md);
+  }
+
+  #arcade-game-list .card {
+    padding: var(--space-md);
+  }
+
+  /* Game canvas — full screen, account for safe areas */
+  #arcade-game-container {
+    padding-top:    env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@media (min-width: 481px) and (max-width: 767px) {
+  #arcade-game-list {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DJ SYSTEM
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  #dj-app {
+    padding: var(--space-md) !important;
+  }
+
+  /* Mode switcher — full width, wrapped */
+  #dj-app > div[style*="justify-content:center"] {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    padding: 0 var(--space-sm);
+  }
+
+  #dj-app > div[style*="justify-content:center"] .btn {
+    flex: 1;
+    min-width: 80px;
+    justify-content: center;
+  }
+
+  /* Decks grid — single column */
+  #dj-decks-grid {
+    grid-template-columns: 1fr !important;
+    gap: var(--space-md);
+  }
+
+  /* Mixer — full width, horizontal layout on mobile */
+  #dj-decks-grid .card[style*="min-width:140px"] {
+    min-width: unset !important;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Range sliders — larger touch target */
+  input[type="range"] {
+    height: 24px;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    -webkit-appearance: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PROFILE PAGE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .sn-profile-banner {
+    height: 140px;
+  }
+
+  .sn-profile-top {
+    margin-top: -40px;
+  }
+
+  .sn-profile-avatar-ring {
+    width: 76px;
+    height: 76px;
+  }
+
+  .sn-profile-stats {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: var(--space-sm);
+  }
+
+  .sn-stat-btn {
+    padding: var(--space-xs) var(--space-sm);
+    text-align: center;
+  }
+
+  .sn-profile-actions {
+    gap: var(--space-sm);
+  }
+
+  /* Follow / Message buttons — full width stacked */
+  .sn-profile-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GALLERY PAGE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .gallery-grid,
+  [id="gallery-grid"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 2px;
+  }
+
+  .gallery-item,
+  [id="gallery-grid"] > * {
+    aspect-ratio: 1;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 767px) {
+  .gallery-grid,
+  [id="gallery-grid"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 4px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SETTINGS PAGE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .settings-layout,
+  [id="settings-root"] {
+    flex-direction: column !important;
+    gap: 0 !important;
+  }
+
+  .settings-sidebar,
+  [id="settings-sidebar"] {
+    width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    overflow-x: auto;
+    flex-direction: row !important;
+    flex-wrap: nowrap;
+    padding: var(--space-sm) !important;
+    scrollbar-width: none;
+  }
+  .settings-sidebar::-webkit-scrollbar,
+  [id="settings-sidebar"]::-webkit-scrollbar { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN PAGE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  .admin-layout,
+  [id="admin-root"] {
+    flex-direction: column !important;
+    gap: 0 !important;
+  }
+
+  .admin-sidebar-desktop {
+    display: none !important;
+  }
+
+  /* Admin tabs — scrollable row to replace sidebar on mobile */
+  .admin-tabs-mobile {
+    display: flex !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 var(--space-sm);
+    margin-bottom: var(--space-md);
+    gap: 2px;
+  }
+  .admin-tabs-mobile::-webkit-scrollbar { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COMPANION WIDGET
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  #avn-companion-widget {
+    /* Narrow it slightly on very small phones */
+    width: calc(100vw - 28px);
+    max-width: 240px;
+    right: var(--space-sm);
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .avn-cmp {
+    max-height: 70dvh;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .avn-disc-choices {
+    gap: var(--space-sm);
+  }
+
+  .avn-disc-choice {
+    min-height: 44px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CLOUDSTREAM / LIVE STREAM
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  #cs-layout {
+    grid-template-columns: 1fr !important;
+    gap: var(--space-md);
+  }
+
+  /* Live stream video — full viewport width */
+  #cs-player-wrap,
+  .cs-player-wrap {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIVE PAGE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .live-grid,
+  [id="live-grid"] {
+    grid-template-columns: 1fr !important;
+    padding: 0 var(--space-sm);
+    gap: var(--space-md);
+  }
+
+  /* Go-live form */
+  .go-live-form,
+  [id="go-live-form"] {
+    padding: var(--space-md) !important;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 767px) {
+  .live-grid,
+  [id="live-grid"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SEARCH PAGE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .search-results-grid,
+  [id="search-results"] {
+    grid-template-columns: 1fr !important;
+    gap: var(--space-sm);
+  }
+
+  .search-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+    gap: var(--space-xs);
+  }
+  .search-filters::-webkit-scrollbar { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HUB.HTML STANDALONE LIVE PAGES (live-hub.html, live.html)
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  .live-stream-layout {
+    flex-direction: column !important;
+  }
+
+  .live-chat-sidebar {
+    width: 100% !important;
+    height: 40vh;
+    border-left: none !important;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .live-video-main {
+    width: 100% !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECTION HEADER — PREVENT OVERFLOW ON NARROW SCREENS
+   ═══════════════════════════════════════════════════════════ */
+
+.section-header {
+  flex-wrap: wrap;
+  row-gap: var(--space-sm);
+}
+
+.section-title {
+  font-size: clamp(1rem, 4vw, 1.3rem);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TABS — SCROLLABLE ON ALL SMALL VIEWPORTS
+   ═══════════════════════════════════════════════════════════ */
+
+.tabs {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex-wrap: nowrap;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-height: 44px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CARDS — PREVENT OVERFLOW
+   ═══════════════════════════════════════════════════════════ */
+
+.card {
+  /* Words should break within card bounds */
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0; /* Allow flex/grid shrink */
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PORTRAIT TABLET (768px – 1023px)
+   ═══════════════════════════════════════════════════════════ */
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Keep mobile nav visible on tablets < 1024px */
+  .mobile-nav {
+    display: block;
+  }
+
+  .has-mobile-nav .page-wrapper {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Show desktop nav on tablets too */
+  .nav-links {
+    display: flex;
+    flex: 1;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+
+  /* Hide mobile-only search icon when search bar is visible */
+  .mobile-only {
+    display: none !important;
+  }
+
+  /* Compact nav search on tablet */
+  .nav-search-desktop {
+    display: flex;
+    width: 160px;
+  }
+
+  /* Tablet grid: 2 columns for most grids */
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid-4 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Chat sidebar visible on tablet */
+  .chat-root {
+    height: calc(100dvh - 60px - 70px);
+    height: calc(100vh  - 60px - 70px);
+  }
+
+  /* Music player — compact layout */
+  .mp-main-row {
+    flex-wrap: nowrap;
+    gap: var(--space-sm);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LANDSCAPE TABLET / SMALL LAPTOP (1024px – 1279px)
+   ═══════════════════════════════════════════════════════════ */
+
+@media (min-width: 1024px) {
+  /* Hide bottom nav — desktop nav handles navigation */
+  .mobile-nav {
+    display: none;
+  }
+
+  /* Restore full bottom padding */
+  .has-mobile-nav .page-wrapper {
+    padding-bottom: 0;
+  }
+
+  .mobile-only {
+    display: none !important;
+  }
+
+  .desktop-only {
+    display: block;
+  }
+
+  /* Show full-width search bar */
+  .nav-search-desktop {
+    display: flex;
+  }
+
+  /* Chat — full sidebar always visible */
+  .chat-sidebar {
+    display: flex;
+  }
+
+  .chat-mobile-menu-btn {
+    display: none !important;
+  }
+
+  .chat-root {
+    height: calc(100dvh - 60px);
+    height: calc(100vh  - 60px);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LANDSCAPE ORIENTATION FIXES
+   ═══════════════════════════════════════════════════════════ */
+
+/* On phones in landscape, reduce vertical space to keep content visible */
+@media (max-height: 500px) and (orientation: landscape) {
+  .nav-global {
+    height: 48px;
+  }
+
+  .page-wrapper {
+    padding-top: 48px;
+  }
+
+  .mobile-nav {
+    /* Collapse to icon-only in landscape on phone */
+    padding: 4px 0;
+  }
+
+  .mobile-nav-item {
+    padding: 4px 10px;
+    font-size: 0; /* Hide labels, icons only */
+  }
+
+  .mobile-nav-item svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .has-mobile-nav .page-wrapper {
+    padding-bottom: 50px;
+  }
+
+  .hub-hero {
+    min-height: 140px;
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  .hub-hero-eclipse {
+    width: 160px;
+    height: 160px;
+  }
+
+  .modal {
+    max-height: 95dvh;
+    max-height: 95vh;
+  }
+
+  /* Chat height in landscape */
+  .chat-root {
+    height: calc(100vh - 48px - 50px);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   KEYBOARD / FOCUS NAVIGATION (Tablets with keyboards, desktops)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Enhanced focus ring — consistent across all elements */
+:focus-visible {
+  outline: 2px solid var(--avenora-gold);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+/* Skip-to-content link for keyboard users */
+.skip-to-main {
+  position: absolute;
+  top: -100px;
+  left: var(--space-md);
+  background: var(--avenora-gold);
+  color: var(--avenora-obsidian);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.9rem;
+  z-index: var(--z-overlay);
+  text-decoration: none;
+  transition: top var(--transition-fast);
+}
+.skip-to-main:focus {
+  top: var(--space-md);
+}
+
+/* Ensure all interactive elements are keyboard-reachable */
+[tabindex="-1"]:focus { outline: none; }
+
+/* ═══════════════════════════════════════════════════════════
+   HOVER-ONLY CONTROL MITIGATIONS
+   — Any control that was previously only visible on :hover
+     must also be visible on :focus-visible and on touch devices.
+   ═══════════════════════════════════════════════════════════ */
+
+/* Post action menu — always tappable */
+.sn-menu-btn {
+  opacity: 1 !important; /* Was 0 until hover */
+}
+
+/* Chat message action buttons */
+.chat-msg-actions {
+  opacity: 1 !important;
+}
+
+/* Track-row action buttons */
+.mtrack-actions {
+  opacity: 1 !important;
+}
+
+/* Comment delete button */
+.sn-comment-delete {
+  opacity: 1 !important;
+}
+
+/* Saved item remove button */
+.midnight-saved-remove {
+  opacity: 1 !important;
+}
+
+/* On desktop these can remain subtle until hover/focus */
+@media (hover: hover) and (pointer: fine) {
+  .sn-menu-btn         { opacity: 0; }
+  .chat-msg-actions    { opacity: 0; }
+  .mtrack-actions      { opacity: 0; }
+  .sn-comment-delete   { opacity: 0; }
+  .midnight-saved-remove { opacity: 0; }
+
+  /* Restore on hover/focus for desktop */
+  .sn-post:hover .sn-menu-btn,
+  .sn-menu-btn:focus-visible { opacity: 1; }
+
+  .chat-msg:hover .chat-msg-actions,
+  .chat-msg-actions:focus-within { opacity: 1; }
+
+  .mtrack-row:hover .mtrack-actions,
+  .mtrack-row.playing .mtrack-actions { opacity: 1; }
+
+  .sn-comment:hover .sn-comment-delete,
+  .sn-comment-delete:focus-visible { opacity: 1; }
+
+  .midnight-saved-item:hover .midnight-saved-remove,
+  .midnight-saved-remove:focus-visible { opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PRINT MEDIA — STRIP BACKGROUNDS, SHOW CONTENT
+   ═══════════════════════════════════════════════════════════ */
+
+@media print {
+  .nav-global,
+  .mobile-nav,
+  .visual-bg,
+  .toast-container,
+  #avn-companion-widget {
+    display: none !important;
+  }
+
+  .page-wrapper {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REDUCED MOTION — ALREADY IN INDIVIDUAL FILES
+   This sheet adds any remaining overrides from its own rules.
+   ═══════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-to-main {
+    transition: none;
+  }
+}

@@ -1,0 +1,652 @@
+/**
+ * AVENORA — Founder Theme Control Center Styles
+ * Used exclusively inside the admin panel (founder-only).
+ * No public-facing styles here.
+ */
+
+/* ─── Layout shell ───────────────────────────────────────── */
+.tcc-root {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.tcc-header {
+  padding: var(--space-lg) 0 var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-lg);
+}
+
+.tcc-header h2 {
+  font-family: var(--font-display);
+  letter-spacing: 0.12em;
+  font-size: clamp(1.1rem, 3vw, 1.6rem);
+  background: linear-gradient(135deg, var(--avenora-gold), var(--avenora-ivory), var(--avenora-bronze));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 4px;
+}
+
+.tcc-subtitle {
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ─── Action bar ─────────────────────────────────────────── */
+.tcc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-lg);
+  align-items: center;
+}
+
+.tcc-actions-right {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+/* ─── Two-column layout: editor + preview ─────────────────── */
+.tcc-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .tcc-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Tab navigation ─────────────────────────────────────── */
+.tcc-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-lg);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tcc-tabs::-webkit-scrollbar { display: none; }
+
+.tcc-tab-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-base), border-color var(--transition-base);
+  white-space: nowrap;
+}
+
+.tcc-tab-btn:hover { color: var(--text-secondary); }
+
+.tcc-tab-btn.active {
+  color: var(--avenora-gold);
+  border-bottom-color: var(--avenora-gold);
+}
+
+.tcc-tab-panel { display: none; }
+.tcc-tab-panel.active { display: block; }
+
+/* ─── Section cards ──────────────────────────────────────── */
+.tcc-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.tcc-section-title {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--avenora-gold);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* ─── Grid of controls ───────────────────────────────────── */
+.tcc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-md);
+}
+
+.tcc-grid-wide {
+  grid-column: 1 / -1;
+}
+
+/* ─── Control row ────────────────────────────────────────── */
+.tcc-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tcc-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.tcc-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: -2px;
+}
+
+/* ─── Color picker row ───────────────────────────────────── */
+.tcc-color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.tcc-color-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.tcc-color-swatch input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.tcc-color-hex {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  width: 100px;
+  transition: border-color var(--transition-fast);
+}
+
+.tcc-color-hex:focus {
+  outline: none;
+  border-color: var(--border-blue);
+}
+
+/* ─── Select / range inputs ──────────────────────────────── */
+.tcc-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+  width: 100%;
+}
+
+.tcc-select:focus {
+  outline: none;
+  border-color: var(--border-blue);
+}
+
+.tcc-range {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-elevated);
+  outline: none;
+  cursor: pointer;
+  accent-color: var(--avenora-gold);
+}
+
+.tcc-range-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.tcc-range-value {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+/* ─── Toggle switch ──────────────────────────────────────── */
+.tcc-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tcc-toggle-row:last-child { border-bottom: none; }
+
+.tcc-toggle-info { flex: 1; min-width: 0; }
+
+.tcc-toggle {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tcc-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.tcc-toggle-track {
+  display: block;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background var(--transition-base);
+  position: relative;
+}
+
+.tcc-toggle input:checked + .tcc-toggle-track {
+  background: var(--avenora-gold);
+  border-color: var(--avenora-gold);
+}
+
+.tcc-toggle-track::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--avenora-ivory);
+  top: 2px;
+  left: 2px;
+  transition: transform var(--transition-base);
+}
+
+.tcc-toggle input:checked + .tcc-toggle-track::after {
+  transform: translateX(18px);
+}
+
+.tcc-toggle input:focus-visible + .tcc-toggle-track {
+  outline: 2px solid var(--avenora-gold);
+  outline-offset: 2px;
+}
+
+/* ─── Preset buttons ─────────────────────────────────────── */
+.tcc-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.tcc-preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-md) var(--space-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  transition: border-color var(--transition-base), color var(--transition-base);
+  text-align: center;
+}
+
+.tcc-preset-btn:hover {
+  border-color: var(--border-blue);
+  color: var(--text-primary);
+}
+
+.tcc-preset-btn.active {
+  border-color: var(--avenora-gold);
+  color: var(--avenora-gold);
+  background: rgba(184,149,75,0.06);
+}
+
+.tcc-preset-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Preview panel ──────────────────────────────────────── */
+.tcc-preview-panel {
+  position: sticky;
+  top: 80px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.tcc-preview-header {
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--avenora-gold);
+}
+
+.tcc-preview-tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-subtle);
+  scrollbar-width: none;
+}
+
+.tcc-preview-tabs::-webkit-scrollbar { display: none; }
+
+.tcc-preview-tab {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tcc-preview-tab.active {
+  color: var(--avenora-gold);
+  border-bottom-color: var(--avenora-gold);
+}
+
+.tcc-preview-content {
+  padding: var(--space-md);
+  min-height: 300px;
+  overflow-y: auto;
+  max-height: 520px;
+}
+
+/* ─── Preview components (themed with CSS vars from tokens) ── */
+.tcc-pv-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.tcc-pv-btn-primary {
+  background: var(--avenora-gold);
+  color: var(--avenora-obsidian, #090807);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.tcc-pv-btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-blue);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.tcc-pv-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: rgba(184,149,75,0.14);
+  color: var(--avenora-gold);
+  border: 1px solid var(--border-blue);
+  margin-right: 6px;
+}
+
+.tcc-pv-input {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.tcc-pv-nav {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.tcc-pv-nav-item {
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  border-bottom: 2px solid transparent;
+}
+
+.tcc-pv-nav-item.active {
+  color: var(--avenora-gold);
+  border-bottom-color: var(--avenora-gold);
+}
+
+.tcc-pv-chat-bubble {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px 14px 14px 2px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  max-width: 80%;
+}
+
+.tcc-pv-chat-bubble.mine {
+  background: rgba(184,149,75,0.12);
+  border-color: var(--border-blue);
+  border-radius: 14px 14px 2px 14px;
+  margin-left: auto;
+}
+
+/* ─── Version history ─────────────────────────────────────── */
+.tcc-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tcc-history-row:last-child { border-bottom: none; }
+
+.tcc-status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tcc-status-pill.published {
+  background: rgba(184,149,75,0.15);
+  color: var(--avenora-gold);
+  border: 1px solid rgba(184,149,75,0.35);
+}
+
+.tcc-status-pill.draft {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.tcc-status-pill.archived {
+  background: rgba(48,33,63,0.3);
+  color: #a888d4;
+  border: 1px solid rgba(136,102,187,0.3);
+}
+
+/* ─── Notification / status bar ─────────────────────────────*/
+.tcc-status-bar {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+  display: none;
+}
+
+.tcc-status-bar.visible { display: flex; align-items: center; gap: var(--space-sm); }
+
+.tcc-status-bar.success {
+  background: rgba(74,158,114,0.12);
+  border: 1px solid rgba(74,158,114,0.3);
+  color: #4a9e72;
+}
+
+.tcc-status-bar.error {
+  background: rgba(192,57,74,0.1);
+  border: 1px solid rgba(192,57,74,0.3);
+  color: var(--neon-red);
+}
+
+.tcc-status-bar.info {
+  background: rgba(184,149,75,0.08);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+/* ─── Textarea / input ───────────────────────────────────── */
+.tcc-input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  width: 100%;
+  transition: border-color var(--transition-fast);
+}
+
+.tcc-input:focus {
+  outline: none;
+  border-color: var(--border-blue);
+}
+
+/* ─── Theme list rows ────────────────────────────────────── */
+.tcc-theme-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  margin-bottom: var(--space-sm);
+}
+
+.tcc-theme-row:hover { border-color: var(--border-blue); }
+.tcc-theme-row.active { border-color: var(--avenora-gold); background: rgba(184,149,75,0.05); }
+
+.tcc-theme-row-info { flex: 1; min-width: 0; }
+.tcc-theme-row-name { font-weight: 600; font-size: 0.88rem; color: var(--text-primary); }
+.tcc-theme-row-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+
+/* ─── Accessibility ──────────────────────────────────────── */
+.tcc-tab-btn:focus-visible,
+.tcc-preset-btn:focus-visible,
+.tcc-toggle input:focus-visible + .tcc-toggle-track,
+.tcc-select:focus-visible,
+.tcc-input:focus-visible {
+  outline: 2px solid var(--avenora-gold);
+  outline-offset: 2px;
+}
+
+/* ─── Responsive ─────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .tcc-grid {
+    grid-template-columns: 1fr;
+  }
+  .tcc-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tcc-actions-right {
+    margin-left: 0;
+  }
+  .tcc-presets {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  }
+}

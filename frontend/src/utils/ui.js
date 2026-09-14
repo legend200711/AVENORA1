@@ -1,0 +1,226 @@
+/**
+ * AVENORA - Shared UI Utilities
+ * Toast notifications, modal manager, input sanitization, formatting
+ */
+
+(function (global) {
+  'use strict';
+
+  // ─── Toast ────────────────────────────────────────────────
+  function initToastContainer() {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  const Toast = {
+    show(message, type = 'info', duration = 4000) {
+      const container = initToastContainer();
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 300ms';
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    },
+    success: (msg, d) => Toast.show(msg, 'success', d),
+    error: (msg, d) => Toast.show(msg, 'error', d),
+    info: (msg, d) => Toast.show(msg, 'info', d),
+    warning: (msg, d) => Toast.show(msg, 'warning', d),
+  };
+
+  // ─── Modal ────────────────────────────────────────────────
+  const Modal = {
+    activeStack: [],
+
+    open(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove('hidden');
+      this.activeStack.push(id);
+      document.body.style.overflow = 'hidden';
+    },
+
+    close(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.add('hidden');
+      this.activeStack = this.activeStack.filter(i => i !== id);
+      if (this.activeStack.length === 0) document.body.style.overflow = '';
+    },
+
+    closeAll() {
+      [...this.activeStack].forEach(id => this.close(id));
+    },
+
+    // Create modal dynamically
+    create({ id, title, body, actions = [] }) {
+      let el = document.getElementById(id);
+      if (el) el.remove();
+
+      el = document.createElement('div');
+      el.id = id;
+      el.className = 'modal-backdrop hidden';
+      el.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="${id}-title">
+          <div class="modal-header">
+            <h3 id="${id}-title" style="margin:0">${escapeHtml(title)}</h3>
+            <button class="btn btn-ghost btn-sm" onclick="Modal.close('${id}')" aria-label="Close">✕</button>
+          </div>
+          <div class="modal-body">${body}</div>
+          ${actions.length ? `<div class="modal-footer">${actions.map(a =>
+            `<button class="btn ${a.class || 'btn-outline'}" onclick="${a.onclick}">${escapeHtml(a.label)}</button>`
+          ).join('')}</div>` : ''}
+        </div>
+      `;
+
+      // Close on backdrop click
+      el.addEventListener('click', (e) => {
+        if (e.target === el) this.close(id);
+      });
+
+      document.body.appendChild(el);
+      return el;
+    },
+  };
+
+  // ─── Input sanitization ───────────────────────────────────
+  function escapeHtml(str) {
+    if (typeof str !== 'string') return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/\//g, '&#x2F;');
+  }
+
+  function sanitizeText(str, maxLen = 1000) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/[<>]/g, '').slice(0, maxLen).trim();
+  }
+
+  // ─── Formatting ───────────────────────────────────────────
+  function formatCount(n) {
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+    return String(n || 0);
+  }
+
+  function formatDuration(seconds) {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function formatTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const diff = (Date.now() - date.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return date.toLocaleDateString();
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  // ─── Avatar ───────────────────────────────────────────────
+  function avatarHtml(user, size = 'md') {
+    if (!user) return `<div class="avatar-placeholder avatar-${size}">?</div>`;
+    const initials = (user.profile?.displayName || user.username || '?')[0].toUpperCase();
+    if (user.profile?.avatarUrl) {
+      return `<img class="avatar avatar-${size}" src="${escapeHtml(user.profile.avatarUrl)}" alt="${escapeHtml(user.username)}" loading="lazy">`;
+    }
+    return `<div class="avatar-placeholder avatar-${size}" style="font-size:${size === 'sm' ? '12px' : size === 'lg' ? '24px' : '16px'}">${initials}</div>`;
+  }
+
+  // ─── Role badge ───────────────────────────────────────────
+  function roleBadgeHtml(role) {
+    const map = {
+      moderator: '<span class="badge badge-mod">MOD</span>',
+      founder: '<span class="badge badge-founder">FOUNDER</span>',
+      admin: '<span class="badge badge-founder">ADMIN</span>',
+    };
+    return map[role] || '';
+  }
+
+  // ─── Error display ────────────────────────────────────────
+  function showError(container, message, onRetry) {
+    container.innerHTML = `
+      <div class="error-state">
+        <div class="error-icon">⚠️</div>
+        <h3>Something went wrong</h3>
+        <p>${escapeHtml(message)}</p>
+        ${onRetry ? `<button class="btn btn-outline" onclick="(${onRetry.toString()})()">Try Again</button>` : ''}
+      </div>
+    `;
+  }
+
+  function showLoading(container, text = 'Loading...') {
+    container.innerHTML = `
+      <div class="loading-state">
+        <div class="spinner spinner-lg"></div>
+        <span>${escapeHtml(text)}</span>
+      </div>
+    `;
+  }
+
+  // ─── Debounce / throttle ──────────────────────────────────
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  function throttle(fn, ms) {
+    let last = 0;
+    return (...args) => {
+      const now = Date.now();
+      if (now - last >= ms) { last = now; fn(...args); }
+    };
+  }
+
+  // ─── Local storage helpers ────────────────────────────────
+  const LS = {
+    get(key, def = null) {
+      try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : def; } catch { return def; }
+    },
+    set(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} },
+    remove(key) { try { localStorage.removeItem(key); } catch {} },
+  };
+
+  // ─── Exports ──────────────────────────────────────────────
+  global.Toast = Toast;
+  global.Modal = Modal;
+  global.escapeHtml = escapeHtml;
+  global.sanitizeText = sanitizeText;
+  global.formatCount = formatCount;
+  global.formatDuration = formatDuration;
+  global.formatTimeAgo = formatTimeAgo;
+  global.formatDate = formatDate;
+  global.avatarHtml = avatarHtml;
+  global.roleBadgeHtml = roleBadgeHtml;
+  global.showError = showError;
+  global.showLoading = showLoading;
+  global.debounce = debounce;
+  global.throttle = throttle;
+  global.LS = LS;
+
+})(window);

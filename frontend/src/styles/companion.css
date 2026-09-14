@@ -1,0 +1,898 @@
+/**
+ * AVENORA COMPANION — Styles
+ * Horror Gothic Egyptian theme. No strobe. Reduced-motion safe.
+ * Widget positions bottom-right, stays above mobile nav (64px).
+ */
+
+/* ─── Easter egg trigger (Black Cat) ───────────────────────── */
+/* A small, subtle black cat silhouette floating persistently over the page.
+   Mounted to <body> from companion.js — always present across every page.
+   Accessible: has aria-label, keyboard focus, 44px touch target minimum.
+   Founder themes may restyle --avn-cat-eye and --avn-cat-nose but
+   the cat remains discoverable unless the TCC easterEggEnabled is false. */
+.avn-egg-trigger {
+  position: fixed;
+  bottom: 80px;        /* sit above mobile nav (64px) */
+  left: 18px;
+  z-index: 89;         /* below companion widget (90), toasts (400), modals (300) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Minimum 44×44px touch target — padded to be comfortably tappable */
+  width: 44px;
+  height: 44px;
+  font-size: 0;        /* no text baseline shift */
+  /* Slate-black with a just-perceptible blue-black hue — subtle but visible */
+  color: #2a2420;
+  opacity: 0.28;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 50%;
+  transition: opacity 400ms ease, transform 300ms ease;
+  touch-action: manipulation;
+  /* Cat eye / nose accent colours (founder theme override points) */
+  --avn-cat-eye: #2d8a5e;
+  --avn-cat-nose: #76552f;
+}
+
+/* Desktop: tuck further left so it never overlaps the companion widget */
+@media (min-width: 768px) {
+  .avn-egg-trigger {
+    bottom: 28px;
+    left: 24px;
+  }
+}
+
+.avn-egg-trigger:hover,
+.avn-egg-trigger:focus-visible {
+  opacity: 0.85;
+  transform: scale(1.1);
+  /* Subtle emerald glow on hover — keeps the "supernatural cat" feel */
+  filter: drop-shadow(0 0 6px rgba(45,138,94,0.65));
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 2px;
+  --avn-cat-eye: #4fc38a;
+}
+
+/* ── Cat SVG ─────────────────────────────────────────────── */
+.avn-egg-cat {
+  display: block;
+  overflow: visible;
+}
+
+/* Subtle tail-flick on hover (not on the main element, only the path) */
+.avn-egg-trigger:hover .avn-egg-cat__tail,
+.avn-egg-trigger:focus-visible .avn-egg-cat__tail {
+  animation: avn-cat-tail 1.2s ease-in-out;
+}
+
+@keyframes avn-cat-tail {
+  0%   { transform-origin: 25px 28px; transform: rotate(0deg); }
+  30%  { transform-origin: 25px 28px; transform: rotate(12deg); }
+  60%  { transform-origin: 25px 28px; transform: rotate(-8deg); }
+  100% { transform-origin: 25px 28px; transform: rotate(0deg); }
+}
+
+/* Subtle pulse for first-time visitors who haven't discovered yet */
+.avn-egg-trigger--pulse {
+  animation: avn-egg-pulse 4s ease-in-out infinite;
+}
+
+@keyframes avn-egg-pulse {
+  0%, 100% { opacity: 0.20; }
+  50%       { opacity: 0.48; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avn-egg-trigger--pulse { animation: none; opacity: 0.32; }
+  .avn-egg-trigger { transition: none; }
+  .avn-egg-trigger:hover .avn-egg-cat__tail,
+  .avn-egg-trigger:focus-visible .avn-egg-cat__tail { animation: none; }
+}
+
+/* ─── Discovery whisper overlay ──────────────────────────────── */
+/* First-contact message: "You found something hidden…"
+   Subtle, atmospheric, full-screen dim with centred Egyptian-gold text.
+   No strobe. Reduced-motion safe. Mobile and desktop. */
+.avn-whisper-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 450; /* above modals (300) and toasts (400) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(9, 8, 7, 0.82);
+  opacity: 0;
+  transition: opacity 500ms ease;
+  padding: var(--space-md, 16px);
+  /* Backdrop tap = same as Continue for touch users */
+}
+
+.avn-whisper-overlay--visible {
+  opacity: 1;
+}
+
+.avn-whisper-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+  max-width: 340px;
+  padding: 36px 28px;
+  background: linear-gradient(160deg, #131210, #0f0d0b);
+  border: 1px solid rgba(184, 149, 75, 0.22);
+  border-radius: 16px;
+  box-shadow: 0 0 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(184, 149, 75, 0.04);
+}
+
+.avn-whisper-glyph {
+  display: block;
+  font-size: 2.6rem;
+  line-height: 1;
+  color: var(--avenora-gold, #b8954b);
+  opacity: 0.72;
+  /* Antique aged-gold hue using a subtle text-shadow */
+  text-shadow: 0 0 16px rgba(184, 149, 75, 0.38), 0 0 4px rgba(118, 85, 47, 0.5);
+  user-select: none;
+}
+
+.avn-whisper-msg {
+  font-family: var(--font-display, 'Cinzel', 'Georgia', serif);
+  font-size: clamp(0.95rem, 3vw, 1.15rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--avenora-ivory, #eee4cf);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.avn-whisper-continue {
+  margin-top: 4px;
+  color: var(--avenora-bronze, #76552f) !important;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  opacity: 0.75;
+  transition: opacity 200ms ease, color 200ms ease;
+  /* Minimum tap target 44×44 for mobile */
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 20px;
+}
+
+.avn-whisper-continue:hover,
+.avn-whisper-continue:focus-visible {
+  opacity: 1;
+  color: var(--avenora-gold, #b8954b) !important;
+  text-decoration: none;
+}
+
+.avn-whisper-continue:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avn-whisper-overlay {
+    transition: none;
+    /* Appear/disappear instantly; JS handles opacity toggle */
+  }
+  .avn-whisper-continue {
+    transition: none;
+  }
+}
+
+/* ─── Floating widget ────────────────────────────────────────── */
+#avn-companion-widget {
+  position: fixed;
+  bottom: 76px; /* clear mobile bottom nav */
+  right: 14px;
+  z-index: 250; /* above page content, below modals/toasts */
+  max-width: 250px;
+  width: 250px;
+  pointer-events: none; /* bubble through except widget itself */
+}
+
+@media (min-width: 768px) {
+  #avn-companion-widget {
+    bottom: 20px;
+  }
+}
+
+.avn-cmp {
+  pointer-events: all;
+  background: var(--bg-card, #131210);
+  border: 1px solid rgba(184, 149, 75, 0.22);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.55), 0 0 16px rgba(184,149,75,0.06);
+  overflow: hidden;
+  font-family: var(--font-main, system-ui, sans-serif);
+  font-size: 0.82rem;
+  color: var(--text-primary, #eee4cf);
+  user-select: none;
+}
+
+/* Minimised state — just the tab */
+.avn-cmp--min {
+  border-radius: var(--radius-full, 9999px);
+  width: auto;
+  max-width: 48px;
+}
+
+/* ─── Tab (always visible; click to expand/minimise) ─────────── */
+.avn-cmp__tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(184,149,75,0.08), rgba(118,85,47,0.05));
+  border-bottom: 1px solid rgba(184,149,75,0.12);
+  min-height: 40px;
+}
+.avn-cmp--min .avn-cmp__tab {
+  border-bottom: none;
+  justify-content: center;
+  padding: 8px;
+}
+
+.avn-cmp__tab:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: -2px;
+}
+
+.avn-cmp__tab-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--avenora-gold, #b8954b);
+}
+
+.avn-cmp__tab-name {
+  font-family: var(--font-display, 'Cinzel', serif);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary, #b0a08a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* ─── Body ───────────────────────────────────────────────────── */
+.avn-cmp__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ─── Header row ─────────────────────────────────────────────── */
+.avn-cmp__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 6px;
+}
+
+.avn-cmp__avatar {
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--avenora-gold, #b8954b);
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+}
+
+.avn-cmp__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.avn-cmp__name {
+  font-family: var(--font-display, 'Cinzel', serif);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  color: var(--avenora-ivory, #eee4cf);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.avn-cmp__mood {
+  font-size: 0.7rem;
+  color: var(--text-muted, #6b5e4e);
+}
+
+.avn-cmp__ctrl {
+  display: flex;
+  gap: 2px;
+}
+
+.avn-cmp__btn-ico {
+  background: none;
+  border: none;
+  color: var(--text-muted, #6b5e4e);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm, 6px);
+  line-height: 1;
+  transition: color 200ms;
+}
+.avn-cmp__btn-ico:hover { color: var(--avenora-gold, #b8954b); }
+.avn-cmp__btn-ico:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 1px;
+}
+
+/* ─── Stat bars ──────────────────────────────────────────────── */
+.avn-cmp__bars {
+  padding: 0 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.avn-cmp__stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.avn-cmp__stat-label {
+  font-size: 0.65rem;
+  color: var(--text-muted, #6b5e4e);
+  width: 38px;
+  flex-shrink: 0;
+}
+
+.avn-cmp__stat-track {
+  flex: 1;
+  height: 5px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.avn-cmp__stat-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--avenora-bronze, #76552f), var(--avenora-gold, #b8954b));
+  border-radius: 3px;
+  transition: width 400ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avn-cmp__stat-fill { transition: none; }
+}
+
+/* ─── Action row ─────────────────────────────────────────────── */
+.avn-cmp__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0 10px 10px;
+}
+
+.avn-cmp__action-btn {
+  flex: 1 1 auto;
+  min-width: 52px;
+  background: rgba(184,149,75,0.07);
+  border: 1px solid rgba(184,149,75,0.15);
+  color: var(--text-secondary, #b0a08a);
+  font-size: 0.72rem;
+  padding: 5px 7px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: background 200ms, color 200ms, border-color 200ms;
+  white-space: nowrap;
+  text-align: center;
+  font-family: var(--font-main, system-ui);
+}
+.avn-cmp__action-btn:hover,
+.avn-cmp__action-btn:focus-visible {
+  background: rgba(184,149,75,0.16);
+  color: var(--avenora-ivory, #eee4cf);
+  border-color: rgba(184,149,75,0.35);
+}
+.avn-cmp__action-btn:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .avn-cmp__action-btn { transition: none; }
+}
+
+/* ─── Speech bubble ──────────────────────────────────────────── */
+.avn-cmp__speech {
+  margin: 0 10px 10px;
+  background: rgba(184,149,75,0.06);
+  border: 1px solid rgba(184,149,75,0.14);
+  border-radius: var(--radius-md, 10px);
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  color: var(--avenora-ivory, #eee4cf);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* ─── Panel ──────────────────────────────────────────────────── */
+.avn-cmp__panel {
+  border-top: 1px solid rgba(184,149,75,0.1);
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184,149,75,0.2) transparent;
+}
+
+.avn-cmp__panel-inner {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.avn-cmp__panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-display, 'Cinzel', serif);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--avenora-gold, #b8954b);
+}
+
+.avn-cmp__panel-close {
+  background: none;
+  border: none;
+  color: var(--text-muted, #6b5e4e);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.avn-cmp__panel-close:hover { color: var(--avenora-gold, #b8954b); }
+.avn-cmp__panel-close:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 1px;
+}
+
+.avn-cmp__panel-note {
+  font-size: 0.7rem;
+  color: var(--text-muted, #6b5e4e);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.avn-cmp__panel-prog {
+  font-size: 0.72rem;
+  color: var(--avenora-gold, #b8954b);
+  font-weight: 600;
+}
+
+/* ─── Tasks ──────────────────────────────────────────────────── */
+.avn-cmp__task-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.avn-cmp__task-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.avn-cmp__task-item--done .avn-cmp__task-label {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.avn-cmp__task-label {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #b0a08a);
+  flex: 1;
+  line-height: 1.4;
+}
+
+.avn-cmp__task-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.avn-cmp__task-btn {
+  font-size: 0.66rem;
+  padding: 3px 6px;
+  background: rgba(184,149,75,0.06);
+  border: 1px solid rgba(184,149,75,0.12);
+  color: var(--text-muted, #6b5e4e);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.avn-cmp__task-btn--done {
+  background: rgba(74,158,114,0.1);
+  border-color: rgba(74,158,114,0.2);
+  color: #4a9e72;
+}
+.avn-cmp__task-btn:hover { opacity: 0.8; }
+.avn-cmp__task-btn:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 1px;
+}
+
+.avn-cmp__task-check {
+  color: #4a9e72;
+  font-size: 0.85rem;
+}
+
+.avn-cmp__task-manage {
+  background: none;
+  border: none;
+  font-size: 0.68rem;
+  color: var(--text-muted, #6b5e4e);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  margin-top: 4px;
+}
+.avn-cmp__task-manage:hover { color: var(--avenora-gold, #b8954b); }
+
+.avn-cmp__task-manage-area {
+  list-style: none;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.avn-cmp__task-manage-item { font-size: 0.7rem; }
+
+.avn-cmp__task-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary, #b0a08a);
+  cursor: pointer;
+}
+
+.avn-cmp__task-toggle-check {
+  accent-color: var(--avenora-gold, #b8954b);
+}
+
+/* ─── Talk panel ─────────────────────────────────────────────── */
+.avn-cmp__talk-bubble {
+  background: rgba(184,149,75,0.07);
+  border: 1px solid rgba(184,149,75,0.14);
+  border-radius: var(--radius-md, 10px);
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  color: var(--avenora-ivory, #eee4cf);
+  line-height: 1.5;
+  font-style: italic;
+  min-height: 44px;
+}
+
+.avn-cmp__talk-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.avn-cmp__talk-prompt {
+  font-size: 0.68rem;
+  padding: 4px 8px;
+  background: rgba(184,149,75,0.06);
+  border: 1px solid rgba(184,149,75,0.12);
+  border-radius: 4px;
+  color: var(--text-secondary, #b0a08a);
+  cursor: pointer;
+  transition: background 200ms;
+}
+.avn-cmp__talk-prompt:hover,
+.avn-cmp__talk-prompt:focus-visible {
+  background: rgba(184,149,75,0.16);
+  color: var(--avenora-ivory, #eee4cf);
+}
+.avn-cmp__talk-prompt:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .avn-cmp__talk-prompt { transition: none; }
+}
+
+.avn-cmp__talk-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.avn-cmp__talk-input {
+  flex: 1;
+  background: var(--bg-elevated, #1e1b17);
+  border: 1px solid rgba(184,149,75,0.15);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-primary, #eee4cf);
+  font-size: 0.72rem;
+  padding: 5px 8px;
+  outline: none;
+}
+.avn-cmp__talk-input:focus {
+  border-color: var(--avenora-gold, #b8954b);
+}
+
+.avn-cmp__talk-send {
+  background: rgba(184,149,75,0.12);
+  border: 1px solid rgba(184,149,75,0.2);
+  color: var(--avenora-gold, #b8954b);
+  font-size: 0.7rem;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+}
+.avn-cmp__talk-send:hover { background: rgba(184,149,75,0.2); }
+.avn-cmp__talk-send:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 1px;
+}
+
+.avn-cmp__talk-disclaimer {
+  font-size: 0.64rem;
+  color: var(--text-muted, #6b5e4e);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* ─── Settings panel ─────────────────────────────────────────── */
+.avn-cmp__settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.avn-cmp__settings-label {
+  font-size: 0.68rem;
+  color: var(--text-muted, #6b5e4e);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.avn-cmp__settings-input,
+.avn-cmp__settings-select {
+  background: var(--bg-elevated, #1e1b17);
+  border: 1px solid rgba(184,149,75,0.15);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-primary, #eee4cf);
+  font-size: 0.75rem;
+  padding: 5px 8px;
+  width: 100%;
+  outline: none;
+}
+.avn-cmp__settings-input:focus,
+.avn-cmp__settings-select:focus {
+  border-color: var(--avenora-gold, #b8954b);
+}
+.avn-cmp__settings-select option {
+  background: var(--bg-secondary, #171513);
+}
+
+.avn-cmp__settings-danger {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 10px;
+}
+
+.avn-cmp__btn-danger {
+  background: none;
+  border: 1px solid rgba(192,57,74,0.25);
+  color: #c0394a;
+  font-size: 0.72rem;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  width: 100%;
+}
+.avn-cmp__btn-danger:hover { background: rgba(192,57,74,0.08); }
+.avn-cmp__btn-danger:focus-visible {
+  outline: 2px solid #c0394a;
+  outline-offset: 1px;
+}
+
+.avn-cmp__settings-note {
+  font-size: 0.65rem;
+  color: var(--text-muted, #6b5e4e);
+  margin-top: 5px;
+}
+
+/* ─── Mini-game panel ────────────────────────────────────────── */
+.avn-cmp__game-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.avn-cmp__game-hud {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.7rem;
+  color: var(--text-secondary, #b0a08a);
+  background: rgba(184,149,75,0.05);
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 8px;
+}
+.avn-cmp__game-hud strong { color: var(--avenora-gold, #b8954b); }
+
+.avn-cmp__game-canvas {
+  border: 1px solid rgba(184,149,75,0.15);
+  border-radius: var(--radius-sm, 6px);
+  background: #0c0a08;
+  display: block;
+  max-width: 100%;
+  touch-action: none;
+}
+
+.avn-cmp__game-msg {
+  font-size: 0.75rem;
+  color: var(--avenora-ivory, #eee4cf);
+  text-align: center;
+  font-style: italic;
+}
+
+/* ─── Discovery modal ────────────────────────────────────────── */
+.avn-discovery-backdrop {
+  animation: avn-fade-in 400ms ease forwards;
+}
+
+@keyframes avn-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avn-discovery-backdrop { animation: none; }
+}
+
+.avn-discovery-modal {
+  max-width: 480px;
+  width: 95%;
+  background: var(--bg-secondary, #171513);
+  border: 1px solid rgba(184,149,75,0.25);
+  box-shadow: 0 0 60px rgba(0,0,0,0.7), 0 0 24px rgba(184,149,75,0.08);
+}
+
+.avn-disc-intro,
+.avn-disc-setup {
+  padding: 28px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.avn-disc-symbol {
+  font-size: 3rem;
+  color: var(--avenora-gold, #b8954b);
+  line-height: 1;
+  opacity: 0.9;
+  /* Subtle shimmer without strobe */
+  animation: avn-glow-pulse 4s ease-in-out infinite;
+}
+
+@keyframes avn-glow-pulse {
+  0%, 100% { text-shadow: 0 0 8px rgba(184,149,75,0.2); }
+  50%       { text-shadow: 0 0 20px rgba(184,149,75,0.5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avn-disc-symbol { animation: none; }
+}
+
+.avn-disc-title {
+  font-family: var(--font-display, 'Cinzel', serif);
+  font-size: clamp(0.9rem, 3vw, 1.1rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--avenora-ivory, #eee4cf);
+  margin: 0;
+}
+
+.avn-disc-text {
+  font-size: 0.88rem;
+  color: var(--text-secondary, #b0a08a);
+  line-height: 1.6;
+  max-width: 360px;
+  margin: 0;
+}
+
+.avn-disc-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.avn-disc-save-note {
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b5e4e);
+  margin: 0;
+}
+
+/* Setup form */
+.avn-disc-setup {
+  align-items: stretch;
+  text-align: left;
+  gap: 10px;
+}
+
+.avn-disc-symbol { align-self: center; }
+.avn-disc-setup .avn-disc-title { text-align: center; }
+
+.avn-disc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.avn-disc-label {
+  font-size: 0.72rem;
+  color: var(--text-muted, #6b5e4e);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.avn-disc-input {
+  font-size: 0.85rem;
+}
+
+.avn-disc-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.avn-disc-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 10px;
+  background: rgba(184,149,75,0.05);
+  border: 1px solid rgba(184,149,75,0.12);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary, #b0a08a);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 200ms, border-color 200ms;
+}
+.avn-disc-choice:hover { background: rgba(184,149,75,0.12); }
+.avn-disc-choice--sel,
+.avn-disc-choice[aria-checked="true"] {
+  background: rgba(184,149,75,0.18);
+  border-color: var(--avenora-gold, #b8954b);
+  color: var(--avenora-ivory, #eee4cf);
+}
+.avn-disc-choice:focus-visible {
+  outline: 2px solid var(--avenora-gold, #b8954b);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .avn-disc-choice { transition: none; }
+}
+
+.avn-disc-choice-sym {
+  font-size: 1.3rem;
+  color: var(--avenora-gold, #b8954b);
+}

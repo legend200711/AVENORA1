@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "chat": {
+      "$roomId": {
+        "messages": {
+          ".read": true,
+          ".write": "auth != null",
+          "$messageId": {
+            ".validate": "newData.hasChildren(['content', 'author', 'timestamp', 'roomId'])",
+            "content": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000"
+            },
+            "author": {
+              ".validate": "newData.hasChildren(['id', 'username'])",
+              "id": {
+                ".validate": "newData.val() == auth.uid"
+              },
+              "$other": { ".validate": true }
+            },
+            "$other": { ".validate": true }
+          }
+        },
+        "typing": {
+          ".read": true,
+          "$userId": {
+            ".write": "auth != null && auth.uid == $userId",
+            ".validate": "newData.hasChildren(['username', 'at'])"
+          }
+        }
+      }
+    }
+  }
+}

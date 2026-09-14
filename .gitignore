@@ -1,0 +1,22 @@
+# Node modules
+node_modules/
+*/node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+.vapid_private.json
+
+# Logs
+*.log
+logs/
+
+# Build output
+dist/
+build/
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
