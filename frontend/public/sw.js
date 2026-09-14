@@ -1,26 +1,25 @@
 /**
- * AVENORA — Service Worker v4 (public/ copy)
+ * AVENORA — Service Worker v3 (public/ copy)
  *
  * This file is a redirect stub. The canonical SW is at:
- *   /AVENORA/sw.js
+ *   /AVENORA1/sw.js
  *
  * This stub exists only to unregister any old SW registrations that may
  * have been made from this path, and to instruct the browser to use the
  * correct canonical SW instead.
  *
- * Deployment base: /AVENORA/
+ * Deployment base: /AVENORA1/
  */
 
 // ── Cache identity ───────────────────────────────────────────────────────────
-const SW_VERSION = 'v4-stub';
-const CACHE_NAME = 'avenora-cache-v4';
+const SW_VERSION = 'v3-stub';
+const CACHE_NAME = 'avenora-cache-v3';
 
 // Old cache names that must be evicted from any device that installed them.
 const OLD_CACHE_PREFIXES = [
   'avenora-v',
   'avenora-cache-v1',
   'avenora-cache-v2',
-  'avenora-cache-v3', // stale v3 with wrong /AVENORA1/ paths
   'legend-cache',
   'shadow-nexus',
   'snx-cache',
