@@ -1,8 +1,8 @@
 /**
  * AVENORA — Service Worker v5
  *
- * Deployment base: /AVENORA/
- * GitHub Pages URL: https://legend200711.github.io/AVENORA/
+ * Deployment base: /AVENORA1/
+ * GitHub Pages URL: https://legend200711.github.io/AVENORA1/
  *
  * Rules:
  *   • NEVER cache: API responses, Firebase data, auth responses,
@@ -33,9 +33,9 @@ _messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title || 'AVENORA';
   const options = {
     body:     payload.notification?.body || 'You have a new notification',
-    icon:     '/AVENORA/icons/icon-192.svg',
-    badge:    '/AVENORA/icons/icon-72.svg',
-    data:     { url: payload.data?.url || '/AVENORA/index.html' },
+    icon:     '/AVENORA1/icons/icon-192.svg',
+    badge:    '/AVENORA1/icons/icon-72.svg',
+    data:     { url: payload.data?.url || '/AVENORA1/index.html' },
     tag:      payload.data?.tag || 'avenora-notification',
     renotify: false,
   };
@@ -63,9 +63,9 @@ const OLD_CACHE_PREFIXES = [
 ];
 
 // ── Static assets to pre-cache ────────────────────────────────────────────────
-// All paths are relative to the SW scope (/AVENORA/).
+// All paths are relative to the SW scope (/AVENORA1/).
 // Do NOT list API URLs, Firebase URLs, or any runtime-fetched data here.
-const BASE = '/AVENORA';
+const BASE = '/AVENORA1';
 const STATIC_ASSETS = [
   `${BASE}/index.html`,
   `${BASE}/offline.html`,
@@ -247,9 +247,9 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'AVENORA';
   const options = {
     body:     data.body || 'You have a new notification',
-    icon:     '/AVENORA/icons/icon-192.svg',
-    badge:    '/AVENORA/icons/icon-72.svg',
-    data:     { url: data.url || '/AVENORA/index.html' },
+    icon:     '/AVENORA1/icons/icon-192.svg',
+    badge:    '/AVENORA1/icons/icon-72.svg',
+    data:     { url: data.url || '/AVENORA1/index.html' },
     tag:      data.tag || 'avenora-notification',
     renotify: false,
   };
@@ -258,7 +258,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/AVENORA/index.html';
+  const url = event.notification.data?.url || '/AVENORA1/index.html';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {

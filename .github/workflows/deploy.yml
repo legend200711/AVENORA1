@@ -27,10 +27,14 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # Disable Jekyll processing — this is a vanilla JS SPA, not a Jekyll site.
+          # Without this, GitHub Pages runs Jekyll on the repo root and strips src/.
+          enablement: false
 
       - name: Add .nojekyll to prevent Jekyll processing
-        # Prevents GitHub Pages Jekyll from ignoring files/dirs with underscores
-        # (e.g. frontend/src/) and from transforming the static app.
+        # Belt-and-suspenders: also add .nojekyll inside frontend/ so that if
+        # Jekyll ever runs it won't transform the static app or ignore _prefixed paths.
         run: touch frontend/.nojekyll
 
       - name: Upload frontend as Pages artifact
