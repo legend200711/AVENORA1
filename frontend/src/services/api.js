@@ -409,7 +409,54 @@
 
   // ─── Search API ───────────────────────────────────────────
   const SearchAPI = {
-    search: (query, type) => get(`/search?q=${encodeURIComponent(query)}${type ? `&type=${type}` : ''}`),
+    async search(query, type) {
+      // Firebase Firestore is the primary search backend.
+      // Wait up to 4 s for Firebase to finish its async initialisation before
+      // falling through — this avoids "API_NOT_CONFIGURED" errors when the user
+      // types quickly right after page load.
+      let fs = window.AvenoraFirebase?.Firestore;
+      if (!fs?.search) {
+        // Poll for up to 4 seconds (16 × 250 ms)
+        for (let i = 0; i < 16 && !fs?.search; i++) {
+          await new Promise(r => setTimeout(r, 250));
+          fs = window.AvenoraFirebase?.Firestore;
+        }
+      }
+
+      if (fs?.search) {
+        try {
+          const results = await fs.search(query);
+          // If a specific type filter is active, zero out the others
+          if (type && type !== 'all') {
+            return {
+              results: {
+                users:  type === 'users'  ? results.users  : [],
+                posts:  type === 'posts'  ? results.posts  : [],
+                videos: type === 'videos' ? results.videos : [],
+              },
+            };
+          }
+          return { results };
+        } catch (fsErr) {
+          console.error('[AVN] Firestore search error:', fsErr);
+          // Surface a clear, actionable error instead of a generic "Something went wrong"
+          const msg = fsErr.code === 'permission-denied'
+            ? 'Search permission denied — please sign in and try again.'
+            : `Search failed: ${fsErr.message || 'unknown Firestore error'}`;
+          const err = new Error(msg);
+          err.code = fsErr.code || 'FIRESTORE_SEARCH_ERROR';
+          err.original = fsErr;
+          throw err;
+        }
+      }
+
+      // Firebase genuinely unavailable — do not silently hit a missing REST endpoint
+      const cfgErr = new Error(
+        'Firebase is not available. Check your internet connection and reload the page.'
+      );
+      cfgErr.code = 'FIREBASE_NOT_READY';
+      throw cfgErr;
+    },
   };
 
   // ─── Users API ────────────────────────────────────────────

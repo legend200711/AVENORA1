@@ -257,10 +257,14 @@
       const ref = doc(db, 'posts', postId);
       const snap = await getDoc(ref);
       const likes = snap.data()?.likes || [];
-      if (likes.includes(user.id)) {
-        await updateDoc(ref, { likes: arrayRemove(user.id) });
+      const userId = user.id || user.uid;
+      const wasLiked = likes.includes(userId);
+      if (wasLiked) {
+        await updateDoc(ref, { likes: arrayRemove(userId) });
+        return { liked: false, likeCount: Math.max(0, likes.length - 1) };
       } else {
-        await updateDoc(ref, { likes: arrayUnion(user.id) });
+        await updateDoc(ref, { likes: arrayUnion(userId) });
+        return { liked: true, likeCount: likes.length + 1 };
       }
     },
 
@@ -414,6 +418,65 @@
       const db = await getFirestore();
       const { doc, deleteDoc } = await loadModule('firestore');
       await deleteDoc(doc(db, 'stories', storyId));
+    },
+
+    // ─── Search ─────────────────────────────────────────────
+    /**
+     * Full client-side search across users, posts, and gallery items.
+     * Firestore does not support native full-text search, so we fetch
+     * recent documents and filter by prefix/substring match client-side.
+     * Results are capped to keep latency low.
+     */
+    async search(queryStr) {
+      const q = (queryStr || '').trim().toLowerCase();
+      if (!q) return { users: [], posts: [], videos: [] };
+
+      const db = await getFirestore();
+      const { collection, query, getDocs, orderBy, limit } = await loadModule('firestore');
+
+      // ── Users ──────────────────────────────────────────
+      const usersSnap = await getDocs(query(collection(db, 'users'), limit(200)));
+      const users = usersSnap.docs
+        .map(d => ({ id: d.id, uid: d.id, ...d.data() }))
+        .filter(u => {
+          const uname = (u.username || '').toLowerCase();
+          const dname = (u.profile?.displayName || '').toLowerCase();
+          const email = (u.email || '').toLowerCase();
+          return uname.includes(q) || dname.includes(q) || email.includes(q);
+        })
+        .slice(0, 20);
+
+      // ── Posts ──────────────────────────────────────────
+      const postsSnap = await getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(200)));
+      const posts = postsSnap.docs
+        .map(d => ({ id: d.id, _id: d.id, ...d.data() }))
+        .filter(p => {
+          const content = (p.content || '').toLowerCase();
+          const author  = (p.author?.username || '').toLowerCase();
+          return content.includes(q) || author.includes(q);
+        })
+        .slice(0, 20);
+
+      // ── Gallery / videos ───────────────────────────────
+      const gallerySnap = await getDocs(query(collection(db, 'gallery'), orderBy('createdAt', 'desc'), limit(100)));
+      const videos = gallerySnap.docs
+        .map(d => ({ id: d.id, _id: d.id, ...d.data() }))
+        .filter(v => {
+          const title   = (v.caption || v.title || '').toLowerCase();
+          const uploader = (v.author?.username || '').toLowerCase();
+          return title.includes(q) || uploader.includes(q);
+        })
+        .map(v => ({
+          id: v.id,
+          title: v.caption || v.title || 'Untitled',
+          uploader: { username: v.author?.username || '' },
+          url: v.url,
+          mediaType: v.mediaType,
+          createdAt: v.createdAt,
+        }))
+        .slice(0, 20);
+
+      return { users, posts, videos };
     },
 
     // ─── User Preferences (stored in users/{uid}/preferences sub-doc) ──
@@ -679,6 +742,10 @@
   global.AvenoraFirebase = {
     getApp,
     getFirebaseAuth,   // exposed so live.js can check auth.currentUser
+    /** Returns the Firestore singleton (same as _db once initialised). */
+    async getFirestore() { return getFirestore(); },
+    /** Direct access to the cached Firestore instance (may be null before first use). */
+    get _db() { return _db; },
     Auth:      FirebaseAuth,
     Firestore: FirestoreService,
     RTDB:      RTDBService,

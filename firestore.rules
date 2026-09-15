@@ -67,13 +67,18 @@ service cloud.firestore {
     // Live chat sub-collection is open to all authenticated users.
     match /liveRooms/{roomId} {
       allow read: if true;
+      // Accept either hostId or ownerUid matching the authenticated user.
+      // live.js writes both fields; this rule accepts either for resilience.
       allow create: if request.auth != null
-        && request.resource.data.hostId == request.auth.uid;
+        && (request.resource.data.hostId == request.auth.uid
+            || request.resource.data.ownerUid == request.auth.uid);
       allow update: if request.auth != null
         && (resource.data.hostId == request.auth.uid
+            || resource.data.ownerUid == request.auth.uid
             || isModeratorOrAbove());
       allow delete: if request.auth != null
         && (resource.data.hostId == request.auth.uid
+            || resource.data.ownerUid == request.auth.uid
             || isModeratorOrAbove());
 
       // Live chat messages

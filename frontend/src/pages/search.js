@@ -50,6 +50,9 @@ registerPage('search', {
   }
 });
 
+// Track the active tab filter
+let _searchActiveFilter = 'all';
+
 const performSearch = debounce(async function (query) {
   const container = document.getElementById('search-results');
   if (!container) return;
@@ -58,29 +61,31 @@ const performSearch = debounce(async function (query) {
     return;
   }
 
-  showLoading(container, `Searching for "${query}"...`);
+  showLoading(container, `Searching for "${escapeHtml(query)}"...`);
 
   try {
-    const data = await LegendAPI.search.search(query);
+    // Pass active filter type so Firestore search can narrow results
+    const filterType = _searchActiveFilter === 'all' ? null : _searchActiveFilter;
+    const data = await LegendAPI.search.search(query, filterType);
     const results = data.results || {};
     const total = (results.users?.length || 0) + (results.posts?.length || 0) + (results.videos?.length || 0);
 
     if (total === 0) {
-      container.innerHTML = `<div class="error-state"><div class="error-icon">🔍</div><h3>No results found</h3><p>Try different keywords</p></div>`;
+      container.innerHTML = `<div class="error-state"><div class="error-icon">🔍</div><h3>No results found</h3><p>Try different keywords or switch tabs</p></div>`;
       return;
     }
 
-    let html = `<p style="color:var(--text-muted);margin-bottom:var(--space-lg);font-size:0.9rem">Found ${total} results for "<strong>${escapeHtml(query)}</strong>"</p>`;
+    let html = `<p style="color:var(--text-muted);margin-bottom:var(--space-lg);font-size:0.9rem">Found ${total} result${total === 1 ? '' : 's'} for "<strong>${escapeHtml(query)}</strong>"</p>`;
 
     if (results.users?.length) {
       html += `<div class="section-header"><h3 class="section-title">USERS (${results.users.length})</h3></div>`;
       html += `<div style="display:flex;flex-direction:column;gap:var(--space-sm);margin-bottom:var(--space-xl)">`;
       html += results.users.map(u => `
-        <a href="#profile/${escapeHtml(u.username)}" class="card" style="display:flex;align-items:center;gap:var(--space-md);text-decoration:none;color:inherit">
+        <a href="#profile/${escapeHtml(u.username || '')}" class="card" style="display:flex;align-items:center;gap:var(--space-md);text-decoration:none;color:inherit">
           ${avatarHtml(u, 'md')}
           <div>
-            <div style="font-weight:600">${escapeHtml(u.profile?.displayName || u.username)}</div>
-            <div style="color:var(--text-muted);font-size:0.85rem">@${escapeHtml(u.username)}</div>
+            <div style="font-weight:600">${escapeHtml(u.profile?.displayName || u.username || 'Unknown')}</div>
+            <div style="color:var(--text-muted);font-size:0.85rem">@${escapeHtml(u.username || '')}</div>
           </div>
           ${roleBadgeHtml(u.role)}
         </a>
@@ -104,11 +109,14 @@ const performSearch = debounce(async function (query) {
     }
 
     if (results.videos?.length) {
-      html += `<div class="section-header"><h3 class="section-title">VIDEOS (${results.videos.length})</h3></div>`;
+      html += `<div class="section-header"><h3 class="section-title">GALLERY / VIDEOS (${results.videos.length})</h3></div>`;
       html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--space-md)">`;
       html += results.videos.map(v => `
-        <div class="card card-glow-blue" style="cursor:pointer" onclick="navigateTo('video')">
-          <div style="aspect-ratio:16/9;background:var(--bg-secondary);border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;color:var(--text-muted)">🎬</div>
+        <div class="card card-glow-blue" style="cursor:pointer" onclick="navigateTo('gallery')">
+          ${v.url && (v.mediaType === 'image' || v.mediaType === 'artwork' || !v.mediaType)
+            ? `<img src="${escapeHtml(v.url)}" alt="${escapeHtml(v.title)}" style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;margin-bottom:8px" loading="lazy">`
+            : `<div style="aspect-ratio:16/9;background:var(--bg-secondary);border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:1.5rem">🎬</div>`
+          }
           <h4 class="truncate" style="font-size:0.9rem">${escapeHtml(v.title)}</h4>
           <p style="color:var(--text-muted);font-size:0.8rem">@${escapeHtml(v.uploader?.username || '')}</p>
         </div>
@@ -118,13 +126,36 @@ const performSearch = debounce(async function (query) {
 
     container.innerHTML = html;
   } catch (err) {
-    console.warn('[AVN] Search error:', err);
-    showError(container, 'Search is temporarily unavailable. Please try again.', () => performSearch(query));
+    console.warn('[AVN] Search error:', err.code, err.message, err.original || '');
+    // Map each known error code to a helpful, non-alarming message
+    let msg;
+    switch (err.code) {
+      case 'API_NOT_CONFIGURED':
+      case 'FIREBASE_NOT_READY':
+        msg = 'Search is loading — please wait a moment and try again.';
+        break;
+      case 'permission-denied':
+        msg = 'You need to be signed in to search. Please sign in and try again.';
+        break;
+      case 'unauthenticated':
+        msg = 'Your session has expired. Please sign in again.';
+        break;
+      default:
+        msg = 'Search encountered an error. Please try again.';
+    }
+    container.innerHTML = `
+      <div class="error-state">
+        <div class="error-icon">🔍</div>
+        <p style="color:var(--text-muted)">${escapeHtml(msg)}</p>
+        <button class="btn btn-outline" style="margin-top:var(--space-md)" onclick="performSearch(document.getElementById('search-main-input')?.value)">Try Again</button>
+      </div>
+    `;
   }
 }, 400);
 
 window.performSearch = performSearch;
 window.searchFilter = function (filter, clickedBtn) {
+  _searchActiveFilter = filter || 'all';
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   if (clickedBtn) clickedBtn.classList.add('active');
   const query = document.getElementById('search-main-input')?.value?.trim();

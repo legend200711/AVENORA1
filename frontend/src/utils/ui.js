@@ -126,20 +126,59 @@
     return `${m}:${String(s).padStart(2, '0')}`;
   }
 
-  function formatTimeAgo(dateStr) {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
+  /**
+   * Normalise a date value that may be:
+   *  - a Firestore Timestamp object  { seconds, nanoseconds }
+   *  - a plain JS Date
+   *  - an ISO/RFC date string
+   *  - a numeric Unix timestamp (ms)
+   * Returns a JS Date, or null if unparseable.
+   */
+  function _toDate(val) {
+    if (!val) return null;
+    // Firestore Timestamp (has .toDate() method)
+    if (typeof val === 'object' && typeof val.toDate === 'function') {
+      const d = val.toDate();
+      return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+    }
+    // Plain object with seconds (Firestore Timestamp serialised to POJO)
+    if (typeof val === 'object' && typeof val.seconds === 'number') {
+      const d = new Date(val.seconds * 1000);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    // Numeric Unix timestamp (ms or s)
+    if (typeof val === 'number') {
+      // If the number looks like seconds (< year 3000 in ms), treat as ms
+      const d = new Date(val > 1e12 ? val : val * 1000);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof val === 'string' && val) {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+  }
+
+  function formatTimeAgo(dateVal) {
+    if (!dateVal) return '';
+    const date = _toDate(dateVal);
+    if (!date) return '';
     const diff = (Date.now() - date.getTime()) / 1000;
-    if (diff < 60) return 'just now';
+    if (diff < 0)    return 'just now';          // clock skew guard
+    if (diff < 60)   return 'just now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return date.toLocaleDateString();
+    try { return date.toLocaleDateString(); } catch { return ''; }
   }
 
-  function formatDate(dateStr) {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  function formatDate(dateVal) {
+    if (!dateVal) return '';
+    const date = _toDate(dateVal);
+    if (!date) return '';
+    try {
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch { return ''; }
   }
 
   // ─── Avatar ───────────────────────────────────────────────

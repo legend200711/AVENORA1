@@ -7,6 +7,44 @@
  * report system, moderation controls.
  */
 
+// ── Timestamp helpers (Firestore Timestamp ↔ JS Date) ───────────────────────
+// Firestore returns createdAt as a Timestamp object { seconds, nanoseconds }
+// or with a .toDate() method. These helpers safely convert to strings for HTML.
+function _tsToDate(val) {
+  if (!val) return null;
+  // Firestore Timestamp with .toDate()
+  if (typeof val === 'object' && typeof val.toDate === 'function') {
+    try {
+      const d = val.toDate();
+      return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+    } catch { return null; }
+  }
+  // Plain POJO { seconds, nanoseconds } — Timestamp serialised through JSON
+  if (typeof val === 'object' && typeof val.seconds === 'number') {
+    const d = new Date(val.seconds * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // Numeric timestamp (ms)
+  if (typeof val === 'number') {
+    const d = new Date(val > 1e12 ? val : val * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // ISO / RFC date string
+  if (typeof val === 'string' && val) {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+function _tsToIso(val) {
+  const d = _tsToDate(val);
+  try { return d ? d.toISOString() : ''; } catch { return ''; }
+}
+function _tsToLocale(val) {
+  const d = _tsToDate(val);
+  try { return d ? d.toLocaleString() : ''; } catch { return ''; }
+}
+
 registerPage('social', {
   _cleanup: null,
 
@@ -285,13 +323,16 @@ window.SNFeed = SNFeed;
 
 const SNPost = {
   render(post) {
+    // Firestore returns `id` (not `_id`); support both for backward compat
+    const postId = post._id || post.id || '';
+    post._id = postId; // normalise so template references work
     const el = document.createElement('article');
     el.className = 'sn-card sn-post';
-    el.dataset.postId = post._id;
+    el.dataset.postId = postId;
     el.setAttribute('aria-label', `Post by ${post.author?.username || 'Unknown'}`);
 
     const user = LegendAPI.auth.getUser();
-    const isOwn = user && (post.author?._id === user.id || post.author?.id === user.id);
+    const isOwn = user && (post.author?._id === user.id || post.author?.id === user.id || post.author?.id === user.uid);
     const isMod = user && ['moderator', 'founder', 'admin'].includes(user.role);
     const likeCount = post.likeCount ?? post.likes?.length ?? 0;
     const commentCount = post.commentCount ?? (post.comments || []).filter(c => !c.isDeleted).length;
@@ -321,7 +362,7 @@ const SNPost = {
           <div class="sn-author-meta">
             <span class="sn-author-handle">@${escapeHtml(post.author?.username || '')}</span>
             <span class="sn-dot">·</span>
-            <time class="sn-timestamp" datetime="${post.createdAt}" title="${new Date(post.createdAt).toLocaleString()}">${formatTimeAgo(post.createdAt)}</time>
+            <time class="sn-timestamp" datetime="${_tsToIso(post.createdAt)}" title="${_tsToLocale(post.createdAt) || 'Unknown date'}">${formatTimeAgo(post.createdAt) || 'recently'}</time>
             ${post.isEdited ? '<span class="sn-edited">(edited)</span>' : ''}
           </div>
         </div>
@@ -436,10 +477,14 @@ const SNPost = {
 
     try {
       const data = await LegendAPI.posts.like(postId);
-      // Sync with server value
-      if (countEl) countEl.textContent = formatCount(data.likeCount);
-      btn.classList.toggle('sn-liked', data.liked);
-      btn.setAttribute('aria-pressed', String(data.liked));
+      // Sync with server value if returned (Firestore path returns { liked, likeCount })
+      if (data && data.likeCount !== undefined) {
+        if (countEl) countEl.textContent = formatCount(data.likeCount);
+      }
+      if (data && data.liked !== undefined) {
+        btn.classList.toggle('sn-liked', data.liked);
+        btn.setAttribute('aria-pressed', String(data.liked));
+      }
     } catch (err) {
       console.warn('[AVN] Like error:', err);
       // Roll back

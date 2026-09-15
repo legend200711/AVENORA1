@@ -259,35 +259,71 @@ async function _liveHubInit(container) {
       }
 
       // ── 2. Verify Firebase currentUser (live token, not cached UID) ──
+      // Firebase Auth is asynchronous at startup — currentUser can be null for
+      // a brief window even when the user is logged in. We wait up to 5 s for
+      // the auth state to resolve before treating it as "not signed in".
       diag.step = 'firebase-current-user';
       let fbCurrentUser = null;
       try {
         const fbAuth = await window.AvenoraFirebase.getFirebaseAuth?.();
         fbCurrentUser = fbAuth?.currentUser || null;
+
+        // If currentUser is still null, wait for onAuthStateChanged to fire once
+        if (!fbCurrentUser) {
+          fbCurrentUser = await new Promise((resolve) => {
+            if (!fbAuth) { resolve(null); return; }
+            import(`https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js`)
+              .then(({ onAuthStateChanged: oacFunc }) => {
+                let resolved = false;
+                const unsub = oacFunc(fbAuth, (u) => {
+                  if (!resolved) {
+                    resolved = true;
+                    try { unsub(); } catch {}
+                    resolve(u);
+                  }
+                });
+                // 5-second fallback so we don't hang forever
+                setTimeout(() => {
+                  if (!resolved) { resolved = true; try { unsub(); } catch {} resolve(null); }
+                }, 5000);
+              })
+              .catch(() => resolve(null));
+          });
+        }
       } catch (authErr) {
         diag.errorCode    = authErr.code || 'AUTH_LOAD_FAILED';
         diag.errorMessage = authErr.message;
+        console.warn('[AVL] Auth check error:', authErr);
       }
       diag.firebaseCurrentUser = fbCurrentUser ? fbCurrentUser.uid : null;
+
+      // If Firebase says no current user but LegendState has a uid, the
+      // session cookie may still be valid — allow the Firestore write to
+      // proceed using the cached uid (Firestore will reject if token is stale).
+      if (!fbCurrentUser && diag.uid) {
+        console.warn('[AVL] Firebase currentUser is null but LegendState uid exists — proceeding with cached uid.');
+        // Create a minimal user-like object so we can use its uid
+        fbCurrentUser = { uid: diag.uid };
+      }
 
       if (!fbCurrentUser) {
         _showErr(
           'Please sign in to Avenora before going live.',
-          `Auth: Firebase currentUser is null — uid=${diag.uid} is from cache only. ` +
-          'Firebase session may have expired. Please sign out and sign in again.'
+          `Auth: Firebase session not found. Please sign out and sign in again.`
         );
         return;
       }
 
       // ── 3. Confirm the cached uid matches Firebase currentUser ───────
-      if (fbCurrentUser.uid !== diag.uid) {
+      if (diag.uid && fbCurrentUser.uid !== diag.uid) {
         console.warn(
           '[AVL] UID mismatch: LegendState uid=' + diag.uid +
           ' vs Firebase uid=' + fbCurrentUser.uid +
           '. Using Firebase uid.'
         );
-        diag.uid = fbCurrentUser.uid;
       }
+      // Always use the live Firebase uid
+      diag.uid = fbCurrentUser.uid;
 
       // ── 4. Write liveRooms document ──────────────────────────────────
       diag.step = 'firestore-write';
@@ -619,14 +655,28 @@ function _avlGetUser() {
   return LegendState.get('user') || LegendAPI.auth.getUser() || null;
 }
 
-/** Resolve Firestore instance from the already-initialised app. */
+/**
+ * Resolve the Firestore instance.
+ * Prefers the singleton already initialised by firebase.js so that the same
+ * auth context, module instance, and internal connection are always used.
+ * Falls back to creating a new instance only if the singleton is unavailable.
+ */
 async function _avlFirestore() {
-  if (window.AvenoraFirebase?._fsInstance) return window.AvenoraFirebase._fsInstance;
+  // 1. Reuse the cached instance from firebase.js if available
+  if (window.AvenoraFirebase?._db) return window.AvenoraFirebase._db;
+
+  // 2. Attempt to obtain it via the Firestore service getter
+  if (typeof window.AvenoraFirebase?.getFirestore === 'function') {
+    const db = await window.AvenoraFirebase.getFirestore();
+    if (db) return db;
+  }
+
+  // 3. Last-resort: create a fresh instance from the same app
   const { getFirestore } = await import(`https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js`);
-  const app = await window.AvenoraFirebase.getApp?.() || null;
+  const app = await window.AvenoraFirebase?.getApp?.();
   if (!app) throw new Error('Firebase app not ready');
-  window.AvenoraFirebase._fsInstance = getFirestore(app);
-  return window.AvenoraFirebase._fsInstance;
+  const db = getFirestore(app);
+  return db;
 }
 
 /** Cache Firestore named exports to avoid repeated dynamic imports. */
