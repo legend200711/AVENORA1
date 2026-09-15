@@ -12,7 +12,17 @@
  *   Firestore  liveRooms/{roomId}   — room metadata (status, title, hostId…)
  *   Auth       window.AvenoraFirebase.Auth  — current user
  *   MediaDevices.getUserMedia        — camera / mic for "Go Live" setup
+ *
+ * Stream handoff:
+ *   When the host presses GO LIVE the setup MediaStream must survive the SPA
+ *   navigation from the hub page to the live-room page. We store it in the
+ *   module-level variable `_avlHandoffStream` so the room init can pick it up
+ *   without re-requesting camera/mic permission.
  */
+
+// Module-level variable — survives SPA route changes within the same page load.
+// Set by startLive() just before navigating; consumed (and cleared) by _liveRoomInit().
+let _avlHandoffStream = null;
 
 /* ── Live Hub page ──────────────────────────────────────────────────── */
 registerPage('live', {
@@ -382,7 +392,15 @@ async function _liveHubInit(container) {
         title,
       });
 
-      _stopPreview();
+      // ── Hand the live stream off to the room page ────────────────────
+      // Do NOT stop the preview tracks here — the live-room page needs them
+      // so the host sees their own camera. The room page will take ownership
+      // of _setupStream and stop it only when the stream ends.
+      //
+      // We pass the stream via a module-level variable so the live-room init
+      // can pick it up without a second getUserMedia call.
+      _avlHandoffStream = _setupStream;
+      _setupStream = null;              // prevent _stopPreview from killing it
       navigateTo(`live-room/${roomRef.id}`);
 
     } catch (err) {
@@ -421,6 +439,7 @@ async function _liveHubInit(container) {
     if (_setupStream) { _setupStream.getTracks().forEach(t => t.stop()); _setupStream = null; }
     const vid = document.getElementById('avl-preview');
     if (vid) vid.srcObject = null;
+    // Note: never stops _avlHandoffStream — that belongs to the live-room page.
   }
 
   // ── Rooms grid ───────────────────────────────────────────────────
@@ -506,7 +525,8 @@ function _liveRoomHTML(roomId) {
       <!-- Video area -->
       <div style="background:#080808;border-radius:10px;overflow:hidden;margin-bottom:var(--space-md);aspect-ratio:16/9;position:relative">
         <video id="avlr-video" autoplay playsinline style="width:100%;height:100%;object-fit:contain;display:block"></video>
-        <div id="avlr-ended-overlay" style="display:none;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.85)">
+        <!-- ended-overlay: starts HIDDEN (display:none only — no second display value) -->
+        <div id="avlr-ended-overlay" style="position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);display:none">
           <div style="font-size:2.5rem;margin-bottom:12px">📡</div>
           <h3 style="margin-bottom:8px">Stream Ended</h3>
           <button class="btn btn-primary" onclick="navigateTo('live')">← Back to Live Hub</button>
@@ -547,45 +567,128 @@ async function _liveRoomInit(container, roomId) {
   const user = _avlGetUser();
   const chatEl = document.getElementById('avlr-chat');
 
-  let _unsubRoom = null;
-  let _unsubChat = null;
-  let _isHost = false;
+  let _unsubRoom   = null;
+  let _unsubChat   = null;
+  let _isHost      = false;
+  let _localStream = null;   // host's camera/mic stream (handed off from setup page)
+  let _viewerCountUnsub = null;
+  let _streamEnded = false;  // guard — never flip to 'ended' more than once
+
+  // ── Helper: show the "Stream Ended" overlay exactly once ───────────
+  function _showEndedOverlay() {
+    if (_streamEnded) return;
+    _streamEnded = true;
+    const overlay = document.getElementById('avlr-ended-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+      // Also stop local tracks if we're the host
+      if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
+    }
+  }
 
   try {
     const fs = await _avlFirestore();
-    const { doc, getDoc, updateDoc, onSnapshot, collection, addDoc, query, orderBy, limit, serverTimestamp, deleteDoc } = await _avlFSImports();
+    const { doc, getDoc, updateDoc, onSnapshot, collection, addDoc,
+            query, orderBy, limit, serverTimestamp, increment } = await _avlFSImports();
 
-    // Load room doc
+    // ── 1. Load the room document ────────────────────────────────────
+    // Use server-side getDoc; ignore pending-writes snapshots for this
+    // initial existence check so a freshly-created room is never
+    // incorrectly treated as ended.
     const roomDoc = await getDoc(doc(fs, 'liveRooms', roomId));
-    if (!roomDoc.exists() || roomDoc.data().status !== 'live') {
-      document.getElementById('avlr-ended-overlay').style.display = 'flex';
+
+    if (!roomDoc.exists()) {
+      _showEndedOverlay();
       return null;
     }
 
     const roomData = roomDoc.data();
-    _isHost = user && (user.uid === roomData.hostId || user.id === roomData.hostId);
-    document.getElementById('avlr-title').textContent = roomData.title || 'Live Stream';
-    document.getElementById('avlr-viewers').textContent = `${roomData.viewerCount || 0} watching`;
+
+    // If the room was already explicitly ended (a past session), show overlay.
+    // Do NOT act on a 'live' room that just has a pending serverTimestamp.
+    if (roomData.status === 'ended') {
+      _showEndedOverlay();
+      return null;
+    }
+
+    // ── 2. Identify host vs viewer ───────────────────────────────────
+    const myUid = user?.uid || user?.id || null;
+    _isHost = !!(myUid && (myUid === roomData.hostId || myUid === roomData.ownerUid));
+
+    document.getElementById('avlr-title').textContent    = roomData.title || 'Live Stream';
+    document.getElementById('avlr-viewers').textContent  = `${roomData.viewerCount || 0} watching`;
 
     if (_isHost) {
       document.getElementById('avlr-host-controls').style.display = '';
     }
 
-    // Watch room status
-    _unsubRoom = onSnapshot(doc(fs, 'liveRooms', roomId), snap => {
-      if (!snap.exists() || snap.data().status !== 'live') {
-        document.getElementById('avlr-ended-overlay').style.display = 'flex';
+    // ── 3. Host camera — pick up the handed-off stream ───────────────
+    // The setup page stored the live MediaStream in _avlHandoffStream
+    // just before navigating. We consume it here so the host's camera
+    // is shown immediately without a second getUserMedia prompt.
+    if (_isHost) {
+      const vid = document.getElementById('avlr-video');
+      if (_avlHandoffStream) {
+        _localStream    = _avlHandoffStream;
+        _avlHandoffStream = null;          // consume — don't reuse on next render
+        if (vid) { vid.srcObject = _localStream; vid.muted = true; }
+      } else {
+        // Fallback: host refreshed the page — re-request camera
+        try {
+          _localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          if (vid) { vid.srcObject = _localStream; vid.muted = true; }
+        } catch (camErr) {
+          console.warn('[AVL] Could not re-acquire camera:', camErr);
+        }
       }
+    }
+
+    // ── 4. Viewer count ──────────────────────────────────────────────
+    // Increment on enter; decrement when the cleanup function runs.
+    // Only for non-host viewers so the host's own view doesn't inflate the count.
+    if (!_isHost && myUid) {
+      try {
+        await updateDoc(doc(fs, 'liveRooms', roomId), { viewerCount: increment(1) });
+      } catch { /* non-critical */ }
+    }
+
+    // ── 5. Watch room status (real-time) ────────────────────────────
+    // Guard against Firestore's "pending writes" snapshots: when a document
+    // is first created the local SDK fires a snapshot immediately with
+    // `hasPendingWrites: true` and server timestamps set to null.
+    // We must NOT treat those as an 'ended' state.
+    _unsubRoom = onSnapshot(doc(fs, 'liveRooms', roomId), snap => {
+      if (!snap.exists()) {
+        // Document was deleted — stream is genuinely over
+        _showEndedOverlay();
+        return;
+      }
+      // Skip snapshots that are still in-flight to the server
+      if (snap.metadata.hasPendingWrites) return;
+
       const d = snap.data() || {};
+      if (d.status === 'ended') {
+        _showEndedOverlay();
+        return;
+      }
+
+      // Update viewer count display
       const el = document.getElementById('avlr-viewers');
       if (el) el.textContent = `${d.viewerCount || 0} watching`;
     });
 
-    // Live chat
-    const chatQ = query(collection(fs, 'liveRooms', roomId, 'liveMessages'), orderBy('ts', 'asc'), limit(100));
+    // ── 6. Live chat ─────────────────────────────────────────────────
+    const chatQ = query(
+      collection(fs, 'liveRooms', roomId, 'liveMessages'),
+      orderBy('ts', 'asc'),
+      limit(100)
+    );
     _unsubChat = onSnapshot(chatQ, snap => {
       if (!chatEl) return;
-      if (snap.empty) { chatEl.innerHTML = '<p style="color:var(--text-muted);text-align:center;margin:auto">No messages yet</p>'; return; }
+      if (snap.empty) {
+        chatEl.innerHTML = '<p style="color:var(--text-muted);text-align:center;margin:auto">No messages yet</p>';
+        return;
+      }
       chatEl.innerHTML = snap.docs.map(d => {
         const m = d.data();
         return `<div><span style="font-weight:600;color:var(--avenora-gold)">${escapeHtml(m.name || 'User')}</span> <span style="color:var(--text-primary)">${escapeHtml(m.text || '')}</span></div>`;
@@ -593,7 +696,7 @@ async function _liveRoomInit(container, roomId) {
       chatEl.scrollTop = chatEl.scrollHeight;
     });
 
-    // Send chat
+    // ── 7. Chat send ─────────────────────────────────────────────────
     AVLRoom.sendChat = async function () {
       if (!user) { Modal.open('auth-modal'); return; }
       const input = document.getElementById('avlr-chat-input');
@@ -602,7 +705,7 @@ async function _liveRoomInit(container, roomId) {
       input.value = '';
       try {
         await addDoc(collection(fs, 'liveRooms', roomId, 'liveMessages'), {
-          uid:  user.uid || user.id || '',
+          uid:  myUid || '',
           name: user.username || user.profile?.displayName || 'User',
           text,
           ts:   serverTimestamp(),
@@ -610,28 +713,33 @@ async function _liveRoomInit(container, roomId) {
       } catch (e) { console.warn('[AVL] Chat send failed:', e); }
     };
 
-    // Host controls
+    // ── 8. Host controls ─────────────────────────────────────────────
     let _camOn = true, _micOn = true;
+
     AVLRoom.toggleCam = function () {
       _camOn = !_camOn;
       const btn = document.getElementById('avlr-btn-cam');
       if (btn) btn.textContent = `📷 Cam: ${_camOn ? 'ON' : 'OFF'}`;
-      // If localStream is attached to video, toggle tracks
-      const vid = document.getElementById('avlr-video');
-      if (vid?.srcObject) vid.srcObject.getVideoTracks().forEach(t => { t.enabled = _camOn; });
+      if (_localStream) _localStream.getVideoTracks().forEach(t => { t.enabled = _camOn; });
     };
 
     AVLRoom.toggleMic = function () {
       _micOn = !_micOn;
       const btn = document.getElementById('avlr-btn-mic');
       if (btn) btn.textContent = `🎤 Mic: ${_micOn ? 'ON' : 'OFF'}`;
-      const vid = document.getElementById('avlr-video');
-      if (vid?.srcObject) vid.srcObject.getAudioTracks().forEach(t => { t.enabled = _micOn; });
+      if (_localStream) _localStream.getAudioTracks().forEach(t => { t.enabled = _micOn; });
     };
 
     AVLRoom.endLive = async function () {
       if (!confirm('End your live stream?')) return;
-      try { await updateDoc(doc(fs, 'liveRooms', roomId), { status: 'ended', endedAt: serverTimestamp() }); } catch {}
+      try {
+        await updateDoc(doc(fs, 'liveRooms', roomId), {
+          status: 'ended',
+          endedAt: serverTimestamp(),
+        });
+      } catch (e) { console.warn('[AVL] endLive write failed:', e); }
+      // Navigate away — the onSnapshot will also fire _showEndedOverlay
+      // for any viewers still on the page
       navigateTo('live');
     };
 
@@ -640,9 +748,27 @@ async function _liveRoomInit(container, roomId) {
     if (chatEl) chatEl.innerHTML = '<p style="color:var(--text-muted);text-align:center">Could not connect to this room.</p>';
   }
 
-  return function cleanup() {
-    if (typeof _unsubRoom === 'function') _unsubRoom();
-    if (typeof _unsubChat === 'function') _unsubChat();
+  // ── Cleanup — runs when the SPA navigates away from this page ──────
+  return async function cleanup() {
+    // Unsubscribe Firestore listeners
+    if (typeof _unsubRoom  === 'function') _unsubRoom();
+    if (typeof _unsubChat  === 'function') _unsubChat();
+
+    // Decrement viewer count when a non-host leaves
+    if (!_isHost && (user?.uid || user?.id)) {
+      try {
+        const fs2 = await _avlFirestore();
+        const { doc: _doc, updateDoc: _upd, increment: _inc } = await _avlFSImports();
+        await _upd(_doc(fs2, 'liveRooms', roomId), { viewerCount: _inc(-1) });
+      } catch { /* non-critical */ }
+    }
+
+    // Stop local tracks if the host navigated away without pressing End Stream.
+    // We intentionally do NOT mark the room as 'ended' here — a page refresh
+    // or accidental navigation should not kill the stream. The room stays live
+    // until the host explicitly presses End Stream or the document is manually
+    // updated. This matches how every real streaming platform behaves.
+    if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
   };
 }
 
