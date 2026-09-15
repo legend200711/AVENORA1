@@ -64,6 +64,7 @@
       live: 'LIVE',
       'live-room': 'LIVE ROOM',
       cloudstream: 'CLOUD STREAM',
+      cloudstudio: 'CREATOR STUDIO',
       dj: 'DJ SYSTEM',
       music: 'MUSIC HUB',
       arcade: 'ARCADE',

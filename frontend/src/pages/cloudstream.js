@@ -22,10 +22,18 @@ registerPage('cloudstream', {
     container.innerHTML = `
       <div style="padding:var(--space-lg)">
         <div class="page-header" style="padding-top:var(--space-xl);padding-bottom:var(--space-md)">
-          <h1 style="font-family:var(--font-display);letter-spacing:0.1em;margin-bottom:4px">
-            <span style="color:var(--neon-green)">AVENORA</span> 24-HOUR CLOUD STREAM
-          </h1>
-          <p class="tagline">24-HOUR ALWAYS-ON CHANNEL</p>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--space-md)">
+            <div>
+              <h1 style="font-family:var(--font-display);letter-spacing:0.1em;margin-bottom:4px">
+                <span style="color:var(--neon-green)">AVENORA</span> 24-HOUR CLOUD STREAM
+              </h1>
+              <p class="tagline">24-HOUR ALWAYS-ON CHANNEL</p>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="navigateTo('cloudstudio')"
+                    title="Manage playlists and upload music for your broadcast">
+              🎛 Creator Studio
+            </button>
+          </div>
         </div>
 
         <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border-subtle);background:#060810">

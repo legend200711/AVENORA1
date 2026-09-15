@@ -371,7 +371,7 @@ function _renderPlaylistSelector() {
   const el = _el('csrPlaylistSelector');
   if (!el) return;
   if (!_creator.playlists.length) {
-    el.innerHTML = '<div class="csr-hint">No playlists found. <a class="csr-link" href="/frontend/index.html#dj">Go to 24-Hour Studio</a> to create a playlist and upload tracks.</div>';
+    el.innerHTML = '<div class="csr-hint">No playlists found. <a class="csr-link" href="#" onclick="event.preventDefault();csrGoToCreatorStudio()">Go to Creator Studio</a> to create a playlist and upload tracks.</div>';
     return;
   }
   el.innerHTML = _creator.playlists.map(pl => {
@@ -743,8 +743,21 @@ window.csrScrollToStream = function() {
   if (el) el.scrollIntoView({ behavior: 'smooth' });
 };
 window.csrScrollToPlaylist = function() {
-  // Navigate back to the 24-Hour Studio page in the Avenora SPA
-  window.location.href = '/frontend/index.html#dj';
+  csrGoToCreatorStudio();
+};
+window.csrGoToCreatorStudio = function() {
+  // Navigate to Creator Studio in the parent SPA (this page runs in an iframe).
+  // If embedded in the SPA, use the parent's navigateTo; otherwise fall back to
+  // a hash-based navigation on the top-level page.
+  if (window.parent && window.parent !== window && typeof window.parent.navigateTo === 'function') {
+    window.parent.navigateTo('cloudstudio');
+  } else {
+    // Direct navigation: resolve relative to deployment base
+    const base = (window.parent && window.parent.AVENORA_BUILD && window.parent.AVENORA_BUILD.basePath)
+      || (typeof window !== 'undefined' && window.AVENORA_BUILD && window.AVENORA_BUILD.basePath)
+      || '/';
+    window.top.location.href = base.replace(/\/$/, '') + '/index.html#cloudstudio';
+  }
 };
 window.csrOpenExistingStream = function() {
   _show('csrDuplicateWarn', false);

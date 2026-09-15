@@ -706,16 +706,16 @@ function renderUploadTab() {
     <div style="max-width:680px;margin:0 auto">
       <h2 class="section-title" style="margin-bottom:var(--space-lg)">UPLOAD MUSIC</h2>
 
-      <!-- Storage status card -->
-      <div class="card" style="border-color:rgba(255,200,0,0.3);background:rgba(255,200,0,0.04);margin-bottom:var(--space-xl)">
+      <!-- Cloud upload info -->
+      <div class="card" style="border-color:rgba(57,255,20,0.2);background:rgba(57,255,20,0.03);margin-bottom:var(--space-xl)">
         <div style="display:flex;gap:var(--space-md);align-items:flex-start">
-          <span style="font-size:1.4rem;flex-shrink:0">⚠️</span>
+          <span style="font-size:1.4rem;flex-shrink:0">☁️</span>
           <div>
-            <h4 style="margin:0 0 6px;color:#ffcc00;font-family:var(--font-display);letter-spacing:0.06em">
-              CLOUD UPLOAD UNAVAILABLE
+            <h4 style="margin:0 0 6px;color:var(--neon-green);font-family:var(--font-display);letter-spacing:0.06em">
+              CLOUD UPLOAD
             </h4>
-            <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:var(--space-sm)">
-              Cloud audio upload is not available at this time. You can still import and play local audio files below.
+            <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0">
+              Upload audio to your cloud library. Uploaded tracks appear in your Cloud Stream playlists and are available across all devices.
             </p>
           </div>
         </div>
@@ -727,7 +727,7 @@ function renderUploadTab() {
           <button class="btn btn-primary" onclick="Modal.open('auth-modal')">Sign In</button>
         </div>` : ''}
 
-      <!-- Upload form (shown but disabled until storage is ready) -->
+      <!-- Upload form -->
       <form id="music-upload-form" onsubmit="musicUploadSubmit(event)">
         <!-- Drop zone -->
         <div class="music-upload-zone" id="music-drop-zone"
@@ -798,6 +798,11 @@ function renderUploadTab() {
                     border:1px solid rgba(255,50,70,0.3);border-radius:var(--radius-sm);
                     font-size:0.85rem;color:var(--neon-red)"></div>
 
+        <div id="music-upload-success" class="hidden"
+             style="margin-top:var(--space-sm);padding:var(--space-sm);background:rgba(57,255,20,0.06);
+                    border:1px solid rgba(57,255,20,0.3);border-radius:var(--radius-sm);
+                    font-size:0.85rem;color:var(--neon-green)"></div>
+
         <div style="margin-top:var(--space-lg);display:flex;gap:var(--space-sm)">
           <button type="submit" class="btn btn-green" id="music-upload-btn"
                   ${!isLoggedIn ? 'disabled title="Sign in first"' : ''}>
@@ -862,16 +867,18 @@ window.musicUploadFileSelected = function (input) {
 
 window.musicUploadSubmit = async function (e) {
   e.preventDefault();
-  const form   = e.target;
-  const file   = document.getElementById('music-upload-file')?.files?.[0];
-  const errEl  = document.getElementById('music-upload-error');
-  const btn    = document.getElementById('music-upload-btn');
-  const progW  = document.getElementById('music-upload-progress-wrap');
-  const fill   = document.getElementById('music-upload-fill');
-  const status = document.getElementById('music-upload-status');
-  const pct    = document.getElementById('music-upload-pct');
+  const form    = e.target;
+  const file    = document.getElementById('music-upload-file')?.files?.[0];
+  const errEl   = document.getElementById('music-upload-error');
+  const succEl  = document.getElementById('music-upload-success');
+  const btn     = document.getElementById('music-upload-btn');
+  const progW   = document.getElementById('music-upload-progress-wrap');
+  const fill    = document.getElementById('music-upload-fill');
+  const status  = document.getElementById('music-upload-status');
+  const pct     = document.getElementById('music-upload-pct');
 
   errEl?.classList.add('hidden');
+  succEl?.classList.add('hidden');
 
   if (!file) {
     errEl.textContent = 'Please select an audio file first.';
@@ -879,49 +886,123 @@ window.musicUploadSubmit = async function (e) {
     return;
   }
 
+  // Must be signed in
+  const firebaseUser = window.AvenoraFirebase?.Auth?.getUser?.();
+  if (!firebaseUser) {
+    errEl.textContent = 'You must be signed in to upload music.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Uploading…';
   progW?.classList.remove('hidden');
+  if (status) status.textContent = 'Uploading to cloud…';
+  if (fill) fill.style.width = '0%';
+  if (pct) pct.textContent = '0%';
 
-  const fd = new FormData(form);
-  fd.append('file', file);
+  const titleVal = form.querySelector('[name="title"]')?.value?.trim() ||
+                   file.name.replace(/\.[^.]+$/, '');
+  const artist  = form.querySelector('[name="artist"]')?.value?.trim() || '';
+  const album   = form.querySelector('[name="album"]')?.value?.trim() || '';
+  const genre   = form.querySelector('[name="genre"]')?.value || '';
+  const desc    = form.querySelector('[name="description"]')?.value?.trim() || '';
+  const visibility = form.querySelector('[name="visibility"]')?.value || 'private';
 
   try {
-    // XHR for real progress
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/music/upload');
-      const token = LegendAPI.TokenStore.getAccess();
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    // 1. Upload the file to Firebase Storage under audio/{uid}/
+    const uid = firebaseUser.uid || firebaseUser.id;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `audio/${uid}/${Date.now()}_${safeName}`;
 
-      xhr.upload.onprogress = ev => {
-        if (ev.lengthComputable) {
-          const p = Math.round((ev.loaded / ev.total) * 100);
-          if (fill) fill.style.width = p + '%';
-          if (pct) pct.textContent = p + '%';
-        }
-      };
+    const downloadURL = await window.AvenoraFirebase.Storage.upload(
+      storagePath,
+      file,
+      (p) => {
+        if (fill) fill.style.width = p + '%';
+        if (pct) pct.textContent = p + '%';
+      }
+    );
 
-      xhr.onload = () => {
-        const data = JSON.parse(xhr.responseText || '{}');
-        if (xhr.status >= 400) {
-          reject(new Error(data.message || 'Upload failed'));
-        } else {
-          resolve(data);
-        }
-      };
-      xhr.onerror = () => reject(new Error('Upload failed'));
-      xhr.send(fd);
-    });
+    if (status) status.textContent = 'Saving track metadata…';
+    if (fill) fill.style.width = '100%';
+    if (pct) pct.textContent = '100%';
+
+    // 2. Measure duration from the file
+    let duration = 0;
+    try {
+      duration = await new Promise((res) => {
+        const tmpAudio = new Audio();
+        tmpAudio.preload = 'metadata';
+        const objUrl = URL.createObjectURL(file);
+        tmpAudio.src = objUrl;
+        tmpAudio.onloadedmetadata = () => {
+          res(isFinite(tmpAudio.duration) ? Math.round(tmpAudio.duration) : 0);
+          URL.revokeObjectURL(objUrl);
+        };
+        tmpAudio.onerror = () => { res(0); URL.revokeObjectURL(objUrl); };
+        setTimeout(() => res(0), 5000); // safety timeout
+      });
+    } catch(_) {}
+
+    // 3. Save metadata to Firestore: cloudStreamTracks/{uid}/tracks/{autoId}
+    //    This collection is read by the Cloud Stream app.
+    //    Use the same Firebase SDK version as firebase.js (10.12.2).
+    const fsDb = await window.AvenoraFirebase.getFirestore();
+    const fsModule = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const trackRef = await fsModule.addDoc(
+      fsModule.collection(fsDb, 'cloudStreamTracks', uid, 'tracks'),
+      {
+        uid,
+        title:       titleVal,
+        artist,
+        album,
+        genre,
+        description: desc,
+        visibility,
+        url:         downloadURL,
+        downloadURL,
+        storagePath,
+        duration,
+        fileName:    file.name,
+        fileSize:    file.size,
+        mimeType:    file.type,
+        status:      'ready',
+        createdAt:   fsModule.serverTimestamp(),
+      }
+    );
+    console.log('[AVN] Track metadata saved, id:', trackRef.id);
 
     progW?.classList.add('hidden');
-    Toast.success('Track uploaded successfully!');
+
+    // Show success message
+    if (succEl) {
+      succEl.textContent = `✓ "${titleVal}" uploaded successfully! It is now available in your Cloud Stream library.`;
+      succEl.classList.remove('hidden');
+    }
+    Toast.success(`Track "${titleVal}" uploaded to cloud!`);
+
+    // Reset form
     form.reset();
     document.getElementById('music-upload-file-preview').innerHTML = '';
+
   } catch (err) {
     console.warn('[AVN] Music upload error:', err);
     progW?.classList.add('hidden');
-    errEl.textContent = 'Your track could not be uploaded. Please try again.';
+    // Provide a clear, specific error message
+    let msg = 'Upload failed. Please try again.';
+    if (err.code === 'storage/unauthorized') {
+      msg = 'Permission denied. Make sure you are signed in and try again.';
+    } else if (err.code === 'storage/canceled') {
+      msg = 'Upload was cancelled.';
+    } else if (err.code === 'storage/quota-exceeded') {
+      msg = 'Storage quota exceeded. Please contact support.';
+    } else if (err.code === 'storage/invalid-format') {
+      msg = 'Invalid file format. Please use MP3, WAV, OGG, FLAC, AAC, M4A, or OPUS.';
+    } else if (err.message) {
+      msg = err.message;
+    }
+    errEl.textContent = msg;
     errEl.classList.remove('hidden');
   } finally {
     btn.disabled = false;

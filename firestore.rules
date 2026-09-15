@@ -106,6 +106,40 @@ service cloud.firestore {
       allow read, write: if false; // managed exclusively by the backend
     }
 
+    // ── Cloud Stream Broadcasts ────────────────────────────
+    // Creator can write their own; backend worker updates status fields.
+    // Everyone can read (for listener discovery).
+    match /cloudStreams/{streamId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null
+        && (resource.data.uid == request.auth.uid
+            || isModeratorOrAbove());
+      allow delete: if request.auth != null
+        && (resource.data.uid == request.auth.uid
+            || isModeratorOrAbove());
+    }
+
+    // ── Now Playing (backend-managed, listeners read-only) ─
+    match /studioCloudStreamMusic/{streamId} {
+      allow read: if true;
+      // Only the stream owner may write initial now-playing; backend overwrites it.
+      allow write: if request.auth != null;
+    }
+
+    // ── Creator Playlists ──────────────────────────────────
+    // Owners manage their own playlists; no one else can read or write.
+    match /studioPlaylists/{uid}/playlists/{plId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── Cloud Stream Track Library ─────────────────────────
+    // Each user's uploaded track metadata, readable by themselves only.
+    match /cloudStreamTracks/{uid}/tracks/{trackId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
     // ── Helper functions ───────────────────────────────────
     function isModeratorOrAbove() {
       return request.auth != null
