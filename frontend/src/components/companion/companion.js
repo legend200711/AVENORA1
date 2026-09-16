@@ -155,14 +155,22 @@
     if (user) {
       try {
         const res = await LegendAPI.companion.me();
-        _companion = res.companion;
-        lsSave(_companion); // mirror to LS for quick restore
-        return;
+        // res.companion is null for new users who have never interacted with the companion.
+        // Fall through to LS / default rather than setting _companion = null.
+        if (res.companion) {
+          _companion = res.companion;
+          // Ensure all required sub-objects exist (backwards-compat with older saved data)
+          if (!_companion.care)       _companion.care       = _defaultCompanion().care;
+          if (!_companion.dailyTasks) _companion.dailyTasks = _defaultTasks();
+          if (!_companion.miniGame)   _companion.miniGame   = { highScore: 0, gamesPlayed: 0 };
+          lsSave(_companion); // mirror to LS for quick restore
+          return;
+        }
       } catch (e) {
         console.warn('[AVN Companion] Could not load from server:', e.message);
       }
     }
-    // Guest / offline: load from LS
+    // Guest / offline / new user: load from LS or create defaults
     _companion = lsLoad() || _defaultCompanion();
   }
 
@@ -746,20 +754,39 @@
   }
 
   // ─── Care actions ─────────────────────────────────────────
+  let _careInFlight = false;
+
   async function doCareAction(action) {
     if (!_companion) return;
+    if (_careInFlight) return; // prevent double-click spam
+    _careInFlight = true;
+
+    // Disable action buttons while saving
+    _widgetEl.querySelectorAll('[data-action]').forEach(b => { b.disabled = true; });
+
     let message = '';
 
     if (LegendAPI.auth.isLoggedIn()) {
       try {
         const res = await LegendAPI.companion.care(action);
-        Object.assign(_companion.care, res.care);
-        message = res.message || '';
+        // Merge returned care stats (Firestore returns the full updated object)
+        if (res.care) Object.assign(_companion.care, res.care);
+        message = res.message || _localCareResponse(action);
+        lsSave(_companion); // keep LS in sync
       } catch (e) {
-        message = 'Something went wrong. Try again in a moment.';
+        console.warn('[AVN Companion] care action failed:', e.message);
+        // Fall back to a local update so the UI still responds
+        const cap = v => Math.min(100, Math.max(0, v));
+        switch (action) {
+          case 'feed':  _companion.care.hunger    = cap((_companion.care.hunger    || 80) + 25); break;
+          case 'water': _companion.care.water     = cap((_companion.care.water     || 80) + 25); break;
+          default:      _companion.care.happiness = cap((_companion.care.happiness || 80) + 10); break;
+        }
+        lsSave(_companion);
+        message = _localCareResponse(action);
       }
     } else {
-      // Guest: local update
+      // Guest: local update only
       const cap = v => Math.min(100, v);
       switch (action) {
         case 'feed':      _companion.care.hunger    = cap((_companion.care.hunger    || 80) + 25); break;
@@ -770,6 +797,10 @@
       lsSave(_companion);
       message = _localCareResponse(action);
     }
+
+    _careInFlight = false;
+    // Re-enable buttons
+    _widgetEl.querySelectorAll('[data-action]').forEach(b => { b.disabled = false; });
 
     showSpeech(message);
     // Refresh bars without full re-render
@@ -952,17 +983,29 @@
 
       if (LegendAPI.auth.isLoggedIn()) {
         try {
-          await LegendAPI.companion.discover();
-          await LegendAPI.companion.setup({
-            name:        _companion.name,
-            appearance:  _companion.appearance,
-            personality: _companion.personality,
-          });
+          // Save the full companion object on first discovery so
+          // all fields (care, dailyTasks, miniGame) are present in Firestore
+          const fullSave = {
+            discovered:   true,
+            name:         _companion.name,
+            appearance:   _companion.appearance,
+            personality:  _companion.personality,
+            widgetVisible: true,
+            disabled:     false,
+            care:         _companion.care,
+            dailyTasks:   _companion.dailyTasks,
+            miniGame:     _companion.miniGame,
+          };
+          const fs = window.AvenoraFirebase?.Firestore;
+          const user = LegendState.get('user');
+          if (fs && user) {
+            await fs.saveCompanion(user.id || user.uid, fullSave);
+          }
         } catch (e) {
           console.warn('[AVN Companion] Could not save discovery:', e.message);
         }
-      }
 
+      }
       // Hide the cat trigger now that discovery is complete
       refreshCatTrigger();
       refreshWidget();

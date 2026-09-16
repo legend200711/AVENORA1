@@ -800,15 +800,143 @@
     },
   };
 
-  // ─── Companion API ────────────────────────────────────────
+  // ─── Companion API — backed directly by Firestore ─────────────
+  // The companion feature has no REST backend; all reads and writes
+  // go to the companions/{uid} Firestore document so they work
+  // without any server configuration.
   const CompanionAPI = {
-    me:           ()                      => get('/companion/me'),
-    discover:     ()                      => post('/companion/discover', {}),
-    setup:        (data)                  => patch('/companion/setup', data),
-    care:         (action)                => post(`/companion/care/${action}`, {}),
-    taskAction:   (key, action)           => request('PATCH', `/companion/tasks/${key}`, { body: { action } }),
-    gameScore:    (score)                 => post('/companion/minigame/score', { score }),
-    widget:       (data)                  => request('PATCH', '/companion/widget', { body: data }),
+    // ── Load companion data for the current user ───────────
+    async me() {
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const fs = window.AvenoraFirebase?.Firestore;
+      if (!fs) throw new Error('Firebase not ready');
+      const data = await fs.getCompanion(user.id || user.uid);
+      return { companion: data };
+    },
+
+    // ── Mark as discovered ─────────────────────────────
+    async discover() {
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const fs = window.AvenoraFirebase?.Firestore;
+      if (!fs) throw new Error('Firebase not ready');
+      await fs.saveCompanion(user.id || user.uid, { discovered: true });
+      return { success: true };
+    },
+
+    // ── Save name / appearance / personality ─────────────────
+    async setup(data) {
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const fs = window.AvenoraFirebase?.Firestore;
+      if (!fs) throw new Error('Firebase not ready');
+      const patch = {};
+      if (data.name        !== undefined) patch.name        = data.name;
+      if (data.appearance  !== undefined) patch.appearance  = data.appearance;
+      if (data.personality !== undefined) patch.personality = data.personality;
+      await fs.saveCompanion(user.id || user.uid, patch);
+      return { success: true };
+    },
+
+    // ── Care actions: feed / water ─────────────────────────
+    async care(action) {
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const fs = window.AvenoraFirebase?.Firestore;
+      if (!fs) throw new Error('Firebase not ready');
+      const uid = user.id || user.uid;
+
+      // Read current state
+      const existing = (await fs.getCompanion(uid)) || {};
+      const care = {
+        hunger:    existing.care?.hunger    ?? 80,
+        water:     existing.care?.water     ?? 80,
+        happiness: existing.care?.happiness ?? 80,
+        energy:    existing.care?.energy    ?? 80,
+      };
+
+      // Apply the action
+      const cap = v => Math.min(100, Math.max(0, v));
+      const messages = {
+        feed:  'Delicious! Thank you for the offering.',
+        water: 'So refreshing. Thank you.',
+      };
+      switch (action) {
+        case 'feed':
+          care.hunger    = cap(care.hunger    + 25);
+          care.energy    = cap(care.energy    + 10);
+          care.happiness = cap(care.happiness + 5);
+          break;
+        case 'water':
+          care.water     = cap(care.water     + 25);
+          care.energy    = cap(care.energy    + 10);
+          care.happiness = cap(care.happiness + 5);
+          break;
+        default:
+          care.happiness = cap(care.happiness + 10);
+      }
+
+      await fs.saveCompanion(uid, { care });
+      return { care, message: messages[action] || 'Thank you.' };
+    },
+
+    // ── Task actions: complete / toggle_enabled ────────────────
+    async taskAction(key, action) {
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const fs = window.AvenoraFirebase?.Firestore;
+      if (!fs) throw new Error('Firebase not ready');
+      const uid = user.id || user.uid;
+
+      const existing = (await fs.getCompanion(uid)) || {};
+      const tasks = existing.dailyTasks || [];
+      const task = tasks.find(t => t.key === key);
+      if (!task) return { success: true };
+
+      if (action === 'complete') {
+        task.completedToday = true;
+        task.lastCompleted  = new Date().toISOString();
+      } else if (action === 'toggle_enabled') {
+        task.enabled = !task.enabled;
+      }
+
+      await fs.saveCompanion(uid, { dailyTasks: tasks });
+      return { success: true };
+    },
+
+    // ── Mini-game high score ───────────────────────────────
+    async gameScore(score) {
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const fs = window.AvenoraFirebase?.Firestore;
+      if (!fs) throw new Error('Firebase not ready');
+      const uid = user.id || user.uid;
+
+      const existing = (await fs.getCompanion(uid)) || {};
+      const current  = existing.miniGame?.highScore ?? 0;
+      const isHighScore = score > current;
+      const miniGame = {
+        ...(existing.miniGame || {}),
+        gamesPlayed: (existing.miniGame?.gamesPlayed || 0) + 1,
+        ...(isHighScore ? { highScore: score } : {}),
+      };
+      await fs.saveCompanion(uid, { miniGame });
+      return { isHighScore, highScore: isHighScore ? score : current };
+    },
+
+    // ── Widget visibility / disabled ─────────────────────────
+    async widget(data) {
+      const user = LegendState.get('user');
+      if (!user) throw new Error('Not authenticated');
+      const fs = window.AvenoraFirebase?.Firestore;
+      if (!fs) throw new Error('Firebase not ready');
+      const patch = {};
+      if (data.widgetVisible !== undefined) patch.widgetVisible = data.widgetVisible;
+      if (data.disabled      !== undefined) patch.disabled      = data.disabled;
+      await fs.saveCompanion(user.id || user.uid, patch);
+      return { success: true };
+    },
   };
 
   // ─── Preferences API ─────────────────────────────────────

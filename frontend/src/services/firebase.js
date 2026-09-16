@@ -496,6 +496,24 @@
         { merge: true }
       );
     },
+
+    // ─── Companion (stored in companions/{uid}) ─────────────────
+    async getCompanion(uid) {
+      const db = await getFirestore();
+      const { doc, getDoc } = await loadModule('firestore');
+      const snap = await getDoc(doc(db, 'companions', uid));
+      return snap.exists() ? snap.data() : null;
+    },
+
+    async saveCompanion(uid, data) {
+      const db = await getFirestore();
+      const { doc, setDoc, serverTimestamp } = await loadModule('firestore');
+      await setDoc(
+        doc(db, 'companions', uid),
+        { ...data, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+    },
   };
 
   // ═══════════════════════════════════════════════════════════════

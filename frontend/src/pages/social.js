@@ -148,7 +148,7 @@ const SNFeed = {
               rows="3"
               maxlength="10000"
               aria-label="Create a post"
-              oninput="SNFeed.updateCharCount(this)"
+              oninput="SNFeed.updateCharCount(this); SNFeed._clearError();"
             ></textarea>
             <div id="sn-image-preview" class="sn-image-preview"></div>
             <div id="sn-post-error" class="sn-inline-error hidden"></div>
@@ -257,6 +257,11 @@ const SNFeed = {
     if (!errEl) return;
     errEl.textContent = msg;
     errEl.classList.remove('hidden');
+  },
+
+  _clearError() {
+    const errEl = document.getElementById('sn-post-error');
+    if (errEl) errEl.classList.add('hidden');
   },
 
   async load(page = 1) {
