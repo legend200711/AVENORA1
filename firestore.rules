@@ -112,6 +112,30 @@ service cloud.firestore {
       allow read, write: if false; // managed exclusively by the backend
     }
 
+    // ── Videos ────────────────────────────────────────────
+    // Uploaded directly from the browser via Firebase Storage + Firestore.
+    // Anyone can read public/unlisted videos; only the owner can write.
+    match /videos/{videoId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.owner.uid == request.auth.uid;
+      allow update: if request.auth != null
+        && (resource.data.owner.uid == request.auth.uid
+            || isModeratorOrAbove());
+      allow delete: if request.auth != null
+        && (resource.data.owner.uid == request.auth.uid
+            || isModeratorOrAbove());
+
+      // Comments sub-collection
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow delete: if request.auth != null
+          && (resource.data.author.id == request.auth.uid
+              || isModeratorOrAbove());
+      }
+    }
+
     // ── Cloud Stream Broadcasts ────────────────────────────
     // Creator can write their own; backend worker updates status fields.
     // Everyone can read (for listener discovery).

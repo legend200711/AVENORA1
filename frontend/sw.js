@@ -44,19 +44,20 @@ _messaging.onBackgroundMessage((payload) => {
 
 // ── Cache identity ───────────────────────────────────────────────────────────
 // SW_VERSION is embedded at build time so the diagnostic panel can read it.
-const SW_VERSION  = 'v6';
-const CACHE_NAME  = 'avenora-cache-v6';
+const SW_VERSION  = 'v7';
+const CACHE_NAME  = 'avenora-cache-v7';
 
 // Prefixes of ALL old caches that must be wiped on activate.
 // Covers every previous Avenora and Shadow Nexus name that may be installed
 // on a user's device.
 const OLD_CACHE_PREFIXES = [
   'avenora-v',        // avenora-v1, avenora-v2
-  'avenora-cache-v1', // exact names below v6
+  'avenora-cache-v1', // exact names below v7
   'avenora-cache-v2',
   'avenora-cache-v3', // v3 had wrong BASE path — evict
   'avenora-cache-v4', // v4 had wrong /AVENORA1/ base path — evict
   'avenora-cache-v5', // v5 — evict to pick up cloud-stream/ assets
+  'avenora-cache-v6', // v6 — evict: CSS diag removed, video upload fixed
   'legend-cache',     // old legend-universe names
   'shadow-nexus',     // old Shadow Nexus caches
   'snx-cache',
@@ -98,6 +99,10 @@ const STATIC_ASSETS = [
   `${BASE}/src/pages/video.js`,
   `${BASE}/src/pages/live.js`,
   `${BASE}/src/pages/cloudstream.js`,
+  `${BASE}/src/pages/cloudstudio.js`,
+  `${BASE}/cloud-stream/index.html`,
+  `${BASE}/cloud-stream/css/cloud-stream.css`,
+  `${BASE}/cloud-stream/js/cloud-stream.js`,
   `${BASE}/src/pages/dj.js`,
   `${BASE}/src/pages/music.js`,
   `${BASE}/src/pages/arcade.js`,
@@ -116,10 +121,6 @@ const STATIC_ASSETS = [
   `${BASE}/icons/icon-192.svg`,
   `${BASE}/icons/icon-384.svg`,
   `${BASE}/icons/icon-512.svg`,
-  // 24-Hour Cloud Stream (embedded in SPA via iframe)
-  `${BASE}/cloud-stream/index.html`,
-  `${BASE}/cloud-stream/css/cloud-stream.css`,
-  `${BASE}/cloud-stream/js/cloud-stream.js`,
 ];
 
 // ── Patterns that must NEVER be cached ───────────────────────────────────────

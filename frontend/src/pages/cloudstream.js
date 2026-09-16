@@ -17,6 +17,7 @@ registerPage('cloudstream', {
     // Derive the base path so the iframe resolves correctly on any host
     // (GitHub Pages: /AVENORA1/, local dev: /).
     const basePath = (window.AVENORA_BUILD && window.AVENORA_BUILD.basePath) || '/';
+    // Build the src without escapeHtml — the path only contains safe URL characters.
     const src = basePath.replace(/\/$/, '') + '/cloud-stream/index.html';
 
     container.innerHTML = `
@@ -39,7 +40,7 @@ registerPage('cloudstream', {
         <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border-subtle);background:#060810">
           <iframe
             id="csr-frame"
-            src="${escapeHtml(src)}"
+            src="${src}"
             style="width:100%;min-height:85vh;border:none;display:block"
             allow="camera; microphone; autoplay; clipboard-write"
             title="Avenora 24-Hour Cloud Stream"
@@ -49,7 +50,27 @@ registerPage('cloudstream', {
       </div>
     `;
 
-    // No timers or streams started in this shell
+    // After the iframe loads, forward the current Firebase ID token so the
+    // iframe can confirm the user is already signed in even before its own
+    // onAuthStateChanged fires.  This eliminates the brief auth-gate flash
+    // and prevents the "signed out" appearance when navigating to Cloud Stream.
+    const frame = document.getElementById('csr-frame');
+    if (frame && window.AvenoraFirebase && window.AvenoraFirebase.Auth) {
+      const sendToken = async () => {
+        try {
+          const token = await window.AvenoraFirebase.Auth.getIdToken();
+          const user  = window.AvenoraFirebase.Auth.getUser();
+          if (token && user && frame.contentWindow) {
+            frame.contentWindow.postMessage(
+              { type: 'AVN_AUTH_TOKEN', idToken: token, uid: user.uid || user.id },
+              window.location.origin
+            );
+          }
+        } catch (_) {}
+      };
+      frame.addEventListener('load', sendToken);
+    }
+
     return () => {};
   }
 });

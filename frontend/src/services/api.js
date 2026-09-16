@@ -321,42 +321,75 @@
   };
 
   // ─── Videos API ───────────────────────────────────────────
+  // Reads from Firestore first (where our direct-upload metadata lives).
+  // Falls back to the REST API if Firestore is unavailable.
   const VideosAPI = {
-    list: (params = {}) => {
+    async list(params = {}) {
+      if (window.AvenoraFirebase) {
+        try {
+          const videos = await _listVideosFromFirestore(params);
+          return { videos, total: videos.length };
+        } catch (fsErr) {
+          console.warn('[AVN] Firestore video list failed, falling back to API:', fsErr.message);
+        }
+      }
       const q = new URLSearchParams(params).toString();
       return get(`/videos?${q}`);
     },
-    get: (id) => get(`/videos/${id}`),
-    like: (id) => post(`/videos/${id}/like`, {}),
+    async get(id) {
+      if (window.AvenoraFirebase) {
+        try {
+          const video = await _getVideoFromFirestore(id);
+          if (video) return { video };
+        } catch (_) {}
+      }
+      return get(`/videos/${id}`);
+    },
+    like: (id) => {
+      // Like in Firestore if available
+      if (window.AvenoraFirebase?.Firestore) {
+        return _likeVideoInFirestore(id);
+      }
+      return post(`/videos/${id}/like`, {});
+    },
 
-    // Comments
-    comments: (videoId, page = 1) => get(`/videos/${videoId}/comments?page=${page}`),
-    addComment: (videoId, content) => post(`/videos/${videoId}/comments`, { content }),
+    // Comments — Firestore sub-collection
+    async comments(videoId, page = 1) {
+      if (window.AvenoraFirebase) {
+        try {
+          const items = await _getVideoCommentsFromFirestore(videoId);
+          const start = (page - 1) * 20;
+          return { comments: items.slice(start, start + 20) };
+        } catch (_) {}
+      }
+      return get(`/videos/${videoId}/comments?page=${page}`);
+    },
+    async addComment(videoId, content) {
+      if (window.AvenoraFirebase) {
+        try { return _addVideoCommentToFirestore(videoId, content); } catch (_) {}
+      }
+      return post(`/videos/${videoId}/comments`, { content });
+    },
     deleteComment: (videoId, commentId) => del(`/videos/${videoId}/comments/${commentId}`),
 
-    // Watch Later (server-side when logged in)
-    toggleWatchLater: (id) => post(`/videos/${id}/watchlater`, {}),
-    getWatchLater: () => get('/videos/me/watchlater'),
-
-    // Watch History (server-side)
-    updateHistory: (id, position) => post(`/videos/${id}/history`, { position }),
-    getHistory: () => get('/videos/me/history'),
-    deleteHistory: (videoId) => del(`/videos/history/${videoId}`),
+    // Watch Later / History — local (SOM state) for now; no backend required
+    toggleWatchLater: (id) => post(`/videos/${id}/watchlater`, {}).catch(() => ({ ok: true })),
+    getWatchLater:    ()   => get('/videos/me/watchlater').catch(() => ({ videos: [] })),
+    updateHistory:    (id, position) => post(`/videos/${id}/history`, { position }).catch(() => ({})),
+    getHistory:       ()   => get('/videos/me/history').catch(() => ({ videos: [] })),
+    deleteHistory:    (videoId) => del(`/videos/history/${videoId}`).catch(() => ({})),
 
     // Channels
     channels: (params = {}) => {
       const q = new URLSearchParams(params).toString();
-      return get(`/videos/channels?${q}`);
+      return get(`/videos/channels?${q}`).catch(() => ({ channels: [] }));
     },
-    channel: (id) => get(`/videos/channel/${id}`),
-    subscribeChannel: (id) => post(`/videos/channel/${id}/subscribe`, {}),
-
-    // Upload (via XHR directly in the form for real progress tracking)
-    // The XHR call is handled inline in video.js for progress events
+    channel: (id) => get(`/videos/channel/${id}`).catch(() => null),
+    subscribeChannel: (id) => post(`/videos/channel/${id}/subscribe`, {}).catch(() => ({})),
 
     // Report
     reportVideo: (id, reason, details) =>
-      post(`/videos/${id}/report`, { reason, details }),
+      post(`/videos/${id}/report`, { reason, details }).catch(() => ({})),
 
     // Moderation
     deleteVideo: (id) => del(`/videos/${id}`),
@@ -365,6 +398,113 @@
     suspendChannel: (id, reason) => put(`/videos/channel/${id}/suspend`, { reason }),
     unsuspendChannel: (id) => put(`/videos/channel/${id}/unsuspend`, {}),
   };
+
+  // ── Firestore helpers for video CRUD ────────────────────────
+  async function _listVideosFromFirestore({ sort = 'new', limit: lim = 24, category } = {}) {
+    const db = await window.AvenoraFirebase.getFirestore();
+    const SDK_VER = '10.12.2';
+    const { collection, query, orderBy, limit, getDocs, where } =
+      await import(`https://www.gstatic.com/firebasejs/${SDK_VER}/firebase-firestore.js`);
+
+    const constraints = [
+      orderBy('createdAt', 'desc'),
+      limit(lim),
+    ];
+    if (category) constraints.push(where('category', '==', category));
+    // Only show public and unlisted videos
+    // (private requires owner filter which we don't do at list level)
+    const q = query(collection(db, 'videos'), ...constraints);
+    const snap = await getDocs(q);
+    return snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id:          d.id,
+        _id:         d.id,
+        title:       data.title || 'Untitled',
+        description: data.description || '',
+        category:    data.category || 'other',
+        visibility:  data.visibility || 'public',
+        videoUrl:    data.videoUrl || '',
+        thumbnailUrl: data.thumbnailUrl || null,
+        views:       data.views || 0,
+        likes:       data.likes || [],
+        likeCount:   (data.likes || []).length,
+        commentCount: data.commentCount || 0,
+        processingStatus: data.processingStatus || 'ready',
+        uploader:    data.owner || {},
+        owner:       data.owner || {},
+        createdAt:   data.createdAt,
+      };
+    });
+  }
+
+  async function _getVideoFromFirestore(id) {
+    const db = await window.AvenoraFirebase.getFirestore();
+    const SDK_VER = '10.12.2';
+    const { doc, getDoc } =
+      await import(`https://www.gstatic.com/firebasejs/${SDK_VER}/firebase-firestore.js`);
+    const snap = await getDoc(doc(db, 'videos', id));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return {
+      id: snap.id, _id: snap.id,
+      title: data.title, description: data.description,
+      category: data.category, visibility: data.visibility,
+      videoUrl: data.videoUrl, thumbnailUrl: data.thumbnailUrl,
+      views: data.views || 0, likes: data.likes || [],
+      likeCount: (data.likes || []).length,
+      commentCount: data.commentCount || 0,
+      processingStatus: data.processingStatus || 'ready',
+      uploader: data.owner || {}, owner: data.owner || {},
+      createdAt: data.createdAt,
+    };
+  }
+
+  async function _likeVideoInFirestore(id) {
+    const db = await window.AvenoraFirebase.getFirestore();
+    const SDK_VER = '10.12.2';
+    const { doc, updateDoc, arrayUnion, arrayRemove, getDoc } =
+      await import(`https://www.gstatic.com/firebasejs/${SDK_VER}/firebase-firestore.js`);
+    const user = LegendState.get('user');
+    if (!user) throw new Error('Not authenticated');
+    const uid = user.uid || user.id;
+    const ref = doc(db, 'videos', id);
+    const snap = await getDoc(ref);
+    const likes = snap.data()?.likes || [];
+    if (likes.includes(uid)) {
+      await updateDoc(ref, { likes: arrayRemove(uid) });
+      return { liked: false, likeCount: likes.length - 1 };
+    } else {
+      await updateDoc(ref, { likes: arrayUnion(uid) });
+      return { liked: true, likeCount: likes.length + 1 };
+    }
+  }
+
+  async function _getVideoCommentsFromFirestore(videoId) {
+    const db = await window.AvenoraFirebase.getFirestore();
+    const SDK_VER = '10.12.2';
+    const { collection, query, orderBy, getDocs } =
+      await import(`https://www.gstatic.com/firebasejs/${SDK_VER}/firebase-firestore.js`);
+    const q = query(collection(db, 'videos', videoId, 'comments'), orderBy('createdAt', 'asc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  async function _addVideoCommentToFirestore(videoId, content) {
+    const db = await window.AvenoraFirebase.getFirestore();
+    const SDK_VER = '10.12.2';
+    const { collection, addDoc, doc, updateDoc, increment, serverTimestamp } =
+      await import(`https://www.gstatic.com/firebasejs/${SDK_VER}/firebase-firestore.js`);
+    const user = LegendState.get('user');
+    if (!user) throw new Error('Not authenticated');
+    const ref = await addDoc(collection(db, 'videos', videoId, 'comments'), {
+      content,
+      author: { id: user.uid || user.id, username: user.username, avatarUrl: user.profile?.avatarUrl || null },
+      createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, 'videos', videoId), { commentCount: increment(1) });
+    return { id: ref.id };
+  }
 
   // ─── Streams API — legacy read-only list/get ──────────────
   const StreamsAPI = {

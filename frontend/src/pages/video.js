@@ -1011,7 +1011,9 @@ async function openVideoDetail(videoId) {
 
 /* ─── Player HTML ────────────────────────────────────────── */
 function buildPlayerHtml(video) {
-  if (!video.hlsUrl && !video.originalFileUrl) {
+  // Accept videoUrl (Firebase Storage), hlsUrl, or originalFileUrl (legacy API)
+  const src = video.videoUrl || video.hlsUrl || video.originalFileUrl;
+  if (!src) {
     return `
       <div class="player-error-overlay" style="position:relative;min-height:280px">
         <div class="player-error-icon">🎬</div>
@@ -1026,8 +1028,7 @@ function buildPlayerHtml(video) {
     `;
   }
 
-  const src = video.hlsUrl || video.originalFileUrl;
-  const id  = video._id || video.id;
+  const id = video._id || video.id;
 
   return `
     <video
@@ -1579,102 +1580,123 @@ function initUploadForm() {
     if (descCount) descCount.textContent = `${descInput.value.length} / 5000`;
   });
 
-  // Form submit
+  // Form submit — uploads directly to Firebase Storage, then writes metadata to Firestore.
+  // This replaces the previous XHR-to-backend approach which required an unreachable API server.
   form?.addEventListener('submit', async e => {
     e.preventDefault();
     const title = titleInput?.value.trim();
     if (!title) { Toast.warning('Please enter a title.'); titleInput?.focus(); return; }
     if (!selectedVideoFile) { Toast.warning('Please select a video file.'); return; }
 
-    const progressWrap = document.getElementById('som-upload-progress');
-    const progressFill = document.getElementById('som-progress-fill');
-    const progressPct  = document.getElementById('som-progress-pct');
-    const progressLabel= document.getElementById('som-progress-label');
-    const statusEl     = document.getElementById('som-upload-status');
-    const resultEl     = document.getElementById('som-upload-result');
-    const uploadBtn    = document.getElementById('som-upload-btn');
+    const progressWrap  = document.getElementById('som-upload-progress');
+    const progressFill  = document.getElementById('som-progress-fill');
+    const progressPct   = document.getElementById('som-progress-pct');
+    const progressLabel = document.getElementById('som-progress-label');
+    const statusEl      = document.getElementById('som-upload-status');
+    const resultEl      = document.getElementById('som-upload-result');
+    const uploadBtn     = document.getElementById('som-upload-btn');
 
     progressWrap.style.display = 'block';
+    resultEl.style.display = 'none';
     uploadBtn.disabled = true;
     uploadBtn.textContent = 'UPLOADING...';
 
-    const category   = document.getElementById('som-category')?.value || 'other';
-    const visibility = document.querySelector('input[name="som-visibility"]:checked')?.value || 'public';
+    const category    = document.getElementById('som-category')?.value || 'other';
+    const visibility  = document.querySelector('input[name="som-visibility"]:checked')?.value || 'public';
     const description = descInput?.value.trim() || '';
 
     try {
-      // Phase 1: Upload video file with real XHR progress
-      progressLabel.textContent = 'Uploading video file...';
-      statusEl.textContent = 'Transferring to server...';
+      const user = LegendState.get('user');
+      if (!user) throw new Error('You must be signed in to upload videos.');
 
-      const formData = new FormData();
-      formData.append('video', selectedVideoFile);
-      formData.append('title', title);
-      formData.append('description', description);
-      formData.append('category', category);
-      formData.append('visibility', visibility);
-      if (thumbInput?.files[0]) formData.append('thumbnail', thumbInput.files[0]);
+      if (!window.AvenoraFirebase?.Storage) throw new Error('Firebase Storage is not available.');
+      if (!window.AvenoraFirebase?.Firestore) throw new Error('Firebase Firestore is not available.');
 
-      // Real XHR for progress tracking
-      const uploadResult = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        const _apiBase = window.LU_CONFIG?.apiUrl || null;
-        if (!_apiBase) { reject(new Error('[AVENORA] API endpoint not configured')); return; }
-        xhr.open('POST', `${_apiBase}/videos/upload`);
-        const token = LegendAPI.TokenStore.getAccess();
-        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      // ── Phase 1: Upload video to Firebase Storage ──────────────
+      progressLabel.textContent = 'Uploading video…';
+      statusEl.textContent = 'Transferring to Firebase Storage…';
+      progressFill.style.width = '0%';
+      progressPct.textContent = '0%';
 
-        xhr.upload.addEventListener('progress', e => {
-          if (e.lengthComputable) {
-            const pct = Math.round((e.loaded / e.total) * 100);
-            if (progressFill) progressFill.style.width = `${pct}%`;
-            if (progressPct) progressPct.textContent = `${pct}%`;
-            if (pct === 100) {
-              progressLabel.textContent = 'Processing on server...';
-              statusEl.textContent = 'Server is processing your video. This may take a moment.';
-            }
+      // Build a deterministic, safe storage path
+      const safeFileName = selectedVideoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const videoStoragePath = `videos/${user.uid || user.id}/${Date.now()}_${safeFileName}`;
+
+      const videoUrl = await window.AvenoraFirebase.Storage.upload(
+        videoStoragePath,
+        selectedVideoFile,
+        (pct) => {
+          if (progressFill) progressFill.style.width = `${pct}%`;
+          if (progressPct)  progressPct.textContent  = `${pct}%`;
+          if (pct === 100) {
+            progressLabel.textContent = 'Finalising upload…';
+            statusEl.textContent = 'Getting download URL…';
           }
-        });
+        }
+      );
 
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try { resolve(JSON.parse(xhr.responseText)); }
-            catch { reject(new Error('Invalid server response.')); }
-          } else {
-            try {
-              const errData = JSON.parse(xhr.responseText);
-              reject(new Error(errData.message || `Upload failed: ${xhr.status}`));
-            } catch {
-              reject(new Error(`Upload failed: ${xhr.status}`));
-            }
-          }
-        });
+      // ── Phase 2: Upload thumbnail (optional) ──────────────────
+      let thumbnailUrl = null;
+      const thumbFile = thumbInput?.files[0];
+      if (thumbFile) {
+        progressLabel.textContent = 'Uploading thumbnail…';
+        statusEl.textContent = 'Uploading cover image…';
+        const safeThumb = thumbFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const thumbPath = `images/thumbnails/${user.uid || user.id}/${Date.now()}_${safeThumb}`;
+        thumbnailUrl = await window.AvenoraFirebase.Storage.upload(thumbPath, thumbFile, null);
+      }
 
-        xhr.addEventListener('error',   () => reject(new Error('Network error during upload. Check your connection.')));
-        xhr.addEventListener('timeout', () => reject(new Error('Upload timed out. Try a smaller file or better connection.')));
-        xhr.addEventListener('abort',   () => reject(new Error('Upload was cancelled.')));
-        xhr.timeout = 300000; // 5 min
+      // ── Phase 3: Write metadata to Firestore videos collection ─
+      progressLabel.textContent = 'Saving video details…';
+      statusEl.textContent = 'Writing to database…';
+      progressFill.style.width = '100%';
+      progressPct.textContent = '100%';
 
-        xhr.send(formData);
-      });
+      const uid = user.uid || user.id;
+      const videoDoc = {
+        title,
+        description,
+        category,
+        visibility,
+        videoUrl,
+        thumbnailUrl: thumbnailUrl || null,
+        storagePath: videoStoragePath,
+        owner: {
+          uid,
+          username: user.username || user.profile?.displayName || 'Unknown',
+          avatarUrl: user.profile?.avatarUrl || null,
+        },
+        views: 0,
+        likes: [],
+        commentCount: 0,
+        processingStatus: 'ready',
+        createdAt: null,   // will be set to serverTimestamp below
+      };
 
-      if (progressFill) progressFill.style.width = '100%';
-      if (progressPct) progressPct.textContent = '100%';
+      // Use the Firestore service to write the document with a serverTimestamp
+      const db = await window.AvenoraFirebase.getFirestore();
+      // We import addDoc / collection / serverTimestamp directly since
+      // FirestoreService doesn't expose a generic addDoc method.
+      const { collection, addDoc, serverTimestamp } =
+        await (async () => {
+          // The firebase.js module caches the firestore module; we import it here.
+          const SDK_VER = '10.12.2';
+          return import(`https://www.gstatic.com/firebasejs/${SDK_VER}/firebase-firestore.js`);
+        })();
+
+      videoDoc.createdAt = serverTimestamp();
+      const docRef = await addDoc(collection(db, 'videos'), videoDoc);
+
+      // ── Success ────────────────────────────────────────────────
       progressLabel.textContent = 'Upload complete!';
-      statusEl.textContent = uploadResult.video?.processingStatus === 'processing'
-        ? 'Your video is being processed. It will be available once transcoding is complete.'
-        : 'Upload successful.';
+      statusEl.textContent = 'Your video is now live.';
 
       resultEl.style.display = 'block';
       resultEl.innerHTML = `
         <div style="background:rgba(0,232,122,0.07);border:1px solid rgba(0,232,122,0.25);border-radius:var(--radius-md);padding:var(--space-md);margin-top:var(--space-sm)">
           <p style="color:var(--midnight-green,#00e87a);font-weight:700;margin-bottom:6px">✓ Upload successful!</p>
           <p style="font-size:0.82rem;color:var(--text-secondary)">
-            "${escapeHtml(title)}" has been uploaded.<br>
-            Status: <strong>${escapeHtml(uploadResult.video?.processingStatus || 'processing')}</strong> —
-            ${uploadResult.video?.processingStatus === 'ready'
-              ? 'Your video is live.'
-              : 'Your video will be available once processing is complete.'}
+            "${escapeHtml(title)}" has been uploaded and is now ready to watch.
           </p>
           <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="loadTab('new')">View Videos</button>
         </div>
@@ -1694,16 +1716,15 @@ function initUploadForm() {
       uploadBtn.textContent = 'UPLOAD VIDEO';
 
       console.warn('[AVN] Video upload error:', err);
-      let errorMsg = 'Your video could not be uploaded. Please try again.';
-      if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-        errorMsg = 'Could not connect. Please check your connection and try again.';
-      }
+
+      // Show the real error message so the user knows what went wrong
+      const errMsg = err.message || 'Your video could not be uploaded. Please try again.';
 
       resultEl.style.display = 'block';
       resultEl.innerHTML = `
         <div style="background:rgba(255,51,68,0.07);border:1px solid rgba(255,51,68,0.25);border-radius:var(--radius-md);padding:var(--space-md)">
           <p style="color:var(--neon-red);font-weight:700;margin-bottom:6px">⚠ Upload failed</p>
-          <p style="font-size:0.82rem;color:var(--text-secondary)">${escapeHtml(errorMsg)}</p>
+          <p style="font-size:0.82rem;color:var(--text-secondary)">${escapeHtml(errMsg)}</p>
           <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="document.getElementById('som-upload-result').style.display='none'">Dismiss</button>
         </div>
       `;

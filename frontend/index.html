@@ -268,10 +268,10 @@
   <script>
     // ── Build / version metadata ──────────────────────────────
     window.AVENORA_BUILD = {
-      version:         '3.1.0',
-      buildTimestamp:  '2025-07-19T12:00:00Z',
-      swVersion:       'v6',
-      swCacheName:     'avenora-cache-v6',
+      version:         '3.2.0',
+      buildTimestamp:  '2025-07-25T00:00:00Z',
+      swVersion:       'v7',
+      swCacheName:     'avenora-cache-v7',
       apiBaseUrl:      'https://api.avenora.app/api',
       firebaseProject: 'avenora-6e147',
       basePath:        '/AVENORA1/',
@@ -334,97 +334,6 @@
 
   <!-- Avenora Companion (Easter egg) — loads after router so auth state is available -->
   <script src="src/components/companion/companion.js"></script>
-
-  <!-- ═══════ CSS DIAGNOSTICS PANEL ══════════════════════════════════════ -->
-  <!-- Temporary diagnostics: verifies every stylesheet loaded correctly.  -->
-  <!-- Remove once CSS loading is confirmed stable on mobile.              -->
-  <script>
-  (function() {
-    'use strict';
-    var BASE = '/AVENORA1/';
-    var sheets = [
-      BASE + 'src/styles/theme.css',
-      BASE + 'src/styles/visual.css',
-      BASE + 'src/styles/social.css',
-      BASE + 'src/styles/midnight.css',
-      BASE + 'src/styles/music.css',
-      BASE + 'src/styles/hub.css',
-      BASE + 'src/styles/chat-extended.css',
-      BASE + 'src/styles/companion.css',
-      BASE + 'src/styles/responsive.css',
-      BASE + 'src/styles/customize.css',
-      BASE + 'src/styles/theme-control.css',
-    ];
-
-    function buildPanel(results) {
-      var allOk = results.every(function(r){ return r.ok; });
-      var panel = document.createElement('div');
-      panel.id = 'avn-css-diag';
-      panel.style.cssText = [
-        'position:fixed','bottom:80px','right:12px','z-index:99999',
-        'background:#1a1a2e','color:#e0e0e0','border:1px solid #444',
-        'border-radius:8px','font-size:11px','font-family:monospace',
-        'max-width:340px','min-width:240px','box-shadow:0 4px 20px rgba(0,0,0,.7)',
-        'max-height:60vh','overflow-y:auto',
-      ].join(';');
-
-      var header = document.createElement('div');
-      header.style.cssText = 'padding:8px 10px;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center;background:' + (allOk ? '#0d3b22' : '#3b0d0d');
-      header.innerHTML = '<strong>CSS Diagnostics ' + (allOk ? '&#10003; ALL OK' : '&#10007; ERRORS') + '</strong>';
-      var closeBtn = document.createElement('button');
-      closeBtn.textContent = '\u2715';
-      closeBtn.style.cssText = 'background:none;border:none;color:#aaa;cursor:pointer;font-size:13px;padding:0 0 0 8px';
-      closeBtn.onclick = function(){ panel.remove(); };
-      header.appendChild(closeBtn);
-      panel.appendChild(header);
-
-      var list = document.createElement('div');
-      list.style.padding = '6px 10px';
-      results.forEach(function(r) {
-        var row = document.createElement('div');
-        row.style.cssText = 'padding:2px 0;border-bottom:1px solid #2a2a3e;word-break:break-all';
-        var icon = r.ok ? '\u2713' : '\u2717';
-        var colour = r.ok ? '#4ade80' : '#f87171';
-        row.innerHTML = '<span style="color:' + colour + '">' + icon + '</span> '
-          + r.url.replace(BASE + 'src/styles/', '')
-          + ' <span style="color:#9ca3af">(' + r.status + ')</span>';
-        list.appendChild(row);
-      });
-
-      var swRow = document.createElement('div');
-      swRow.style.cssText = 'padding:4px 0;margin-top:4px;color:#9ca3af';
-      swRow.textContent = 'SW cache: ' + (window.AVENORA_BUILD ? window.AVENORA_BUILD.swCacheName : 'unknown');
-      list.appendChild(swRow);
-
-      panel.appendChild(list);
-      document.body.appendChild(panel);
-    }
-
-    window.addEventListener('load', function() {
-      Promise.all(sheets.map(function(url) {
-        return fetch(url, { method: 'HEAD', cache: 'no-store' })
-          .then(function(res) {
-            var ct = res.headers.get('content-type') || '';
-            var ok = res.ok && ct.indexOf('text/css') !== -1;
-            return { url: url, status: res.status + ' ' + (ct || 'no content-type'), ok: ok };
-          })
-          .catch(function(err) {
-            return { url: url, status: 'fetch-error: ' + err.message, ok: false };
-          });
-      })).then(function(results) {
-        var anyFail = results.some(function(r){ return !r.ok; });
-        buildPanel(results);
-        // Auto-dismiss after 15s if all passed; stay visible on errors.
-        if (!anyFail) {
-          setTimeout(function() {
-            var p = document.getElementById('avn-css-diag');
-            if (p) p.remove();
-          }, 15000);
-        }
-      });
-    });
-  }());
-  </script>
 
   <!-- Service Worker registration + PWA install prompt + SW update handler -->
   <script>

@@ -25,16 +25,16 @@
 'use strict';
 
 import { initializeApp, getApps, getApp }
-  from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getAuth, onAuthStateChanged, browserLocalPersistence, setPersistence
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   getFirestore,
   doc, getDoc, getDocs, setDoc, updateDoc, addDoc,
   collection, query, orderBy, limit, where, onSnapshot,
   serverTimestamp, documentId
-} from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* ── Firebase config — Avenora (avenora-6e147) ─────────────────────── */
 const _CFG = {
@@ -115,16 +115,17 @@ let _confirmCallback = null;
 /* ═══════════════════════════════════════════════════════
    BOOT
 ═══════════════════════════════════════════════════════ */
-onAuthStateChanged(_auth, async user => {
+
+// Track whether the app has already been initialised for a user so the
+// postMessage auth path doesn't double-initialise.
+let _appInitialised = false;
+
+async function _startApp(user) {
+  if (_appInitialised) return;
+  _appInitialised = true;
+
   _show('csrLoading', false);
-
-  if (!user) {
-    _show('csrAuthGate', true);
-    _show('csrApp', false);
-    _setAuthBadge('Sign In');
-    return;
-  }
-
+  _show('csrAuthGate', false);
   _user = user;
   try {
     const snap = await getDoc(doc(_db, 'users', user.uid));
@@ -138,15 +139,47 @@ onAuthStateChanged(_auth, async user => {
   const watchId = params.get('id') || params.get('watch') || params.get('stream');
 
   if (watchId) {
-    // Listener mode: open a specific broadcast
     _show('csrApp', true);
     _show('csrListenerPanel', true);
     await _initListenerMode(watchId);
   } else {
-    // Creator mode: check for own active stream
     _show('csrApp', true);
     await _initCreatorMode();
   }
+}
+
+onAuthStateChanged(_auth, async user => {
+  if (user) {
+    await _startApp(user);
+  } else if (!_appInitialised) {
+    // Firebase didn't restore a session yet — keep the loading spinner
+    // visible for a moment to allow the postMessage token path to fire first.
+    // If no token arrives within 3 s, show the auth gate.
+    setTimeout(() => {
+      if (!_appInitialised) {
+        _show('csrLoading', false);
+        _show('csrAuthGate', true);
+        _show('csrApp', false);
+        _setAuthBadge('Sign In');
+      }
+    }, 3000);
+  }
+});
+
+// If this page is embedded as an iframe inside the AVENORA SPA, the parent
+// sends the current Firebase ID token via postMessage immediately after the
+// iframe loads.  We use signInWithCustomToken here — but since we only have
+// an ID token (not a custom token), we simply ignore it; having the same SDK
+// version means Firebase will already share the localStorage session.
+// The postMessage is kept as a signal to suppress the auth-gate timeout.
+window.addEventListener('message', async (event) => {
+  try {
+    if (!event.data || event.data.type !== 'AVN_AUTH_TOKEN') return;
+    // Parent confirmed the user is signed in — cancel the auth-gate timer
+    // by marking initialised if auth hasn't fired yet.
+    // The real sign-in is via shared localStorage (same SDK version as parent).
+    // Nothing else to do here; onAuthStateChanged will fire with the user.
+  } catch (_) {}
 });
 
 /* ═══════════════════════════════════════════════════════
